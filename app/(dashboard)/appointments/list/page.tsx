@@ -26,9 +26,12 @@ export default function AppointmentListPage() {
   const [draft, setDraft] = useState<AppointmentRecord | null>(null);
   const [isUpdating, startUpdateTransition] = useTransition();
   const summary = getAppointmentSummary(appointments);
-  const sortedAppointments = [...appointments].sort((left, right) =>
-    `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
-  );
+  // Only show appointments that were booked manually by the patient (assume those with a real patient email, not sample/generic emails)
+  const sortedAppointments = [...appointments]
+    .filter(a => !a.email.endsWith('@example.com'))
+    .sort((left, right) =>
+      `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
+    );
   const canManage = role !== "PATIENT";
 
   function beginEdit(appointment: AppointmentRecord) {
