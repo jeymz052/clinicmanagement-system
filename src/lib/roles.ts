@@ -1,0 +1,99 @@
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "SECRETARY"
+  | "DOCTOR"
+  | "PATIENT";
+
+export type RoleProfile = {
+  role: UserRole;
+  label: string;
+  shortLabel: string;
+  description: string;
+};
+
+export const ROLE_PROFILES: RoleProfile[] = [
+  {
+    role: "SUPER_ADMIN",
+    label: "Super Admin",
+    shortLabel: "SA",
+    description: "Full control, permissions, and system configuration",
+  },
+  {
+    role: "SECRETARY",
+    label: "Secretary / Admin Staff",
+    shortLabel: "ST",
+    description: "Appointments, patients, walk-ins, and POS billing",
+  },
+  {
+    role: "DOCTOR",
+    label: "Doctor",
+    shortLabel: "DR",
+    description: "Appointments, schedules, consultation notes, and online consults",
+  },
+  {
+    role: "PATIENT",
+    label: "Patient",
+    shortLabel: "PT",
+    description: "Register, book, and pay for online consultations",
+  },
+];
+
+export const DEFAULT_ROLE: UserRole = "SECRETARY";
+
+export function getRoleProfile(role: UserRole) {
+  return ROLE_PROFILES.find((profile) => profile.role === role) ?? ROLE_PROFILES[1];
+}
+
+type RouteAccessRule = {
+  prefixes: string[];
+  allowedRoles: UserRole[];
+};
+
+const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
+  {
+    prefixes: ["/dashboard"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/appointments"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/payments/invoices", "/payments/pos"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/payments"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/patients/add"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY"],
+  },
+  {
+    prefixes: ["/patients"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/consultations"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/schedules"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
+  },
+  {
+    prefixes: ["/reports", "/settings", "/help"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
+  },
+];
+
+export function canAccessPath(role: UserRole, pathname: string) {
+  const matchingRule = ROUTE_ACCESS_RULES.find((rule) =>
+    rule.prefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    ),
+  );
+
+  return matchingRule ? matchingRule.allowedRoles.includes(role) : true;
+}

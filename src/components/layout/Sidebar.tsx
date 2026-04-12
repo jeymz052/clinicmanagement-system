@@ -15,11 +15,11 @@ import {
   FaHouse,
   FaRegMessage,
   FaRegUser,
+  FaShieldHalved,
   FaStethoscope,
   FaUsers,
 } from "react-icons/fa6";
-
-type UserRole = "SUPER_ADMIN" | "ADMIN" | "DOCTOR" | "PATIENT";
+import { getRoleProfile, type UserRole } from "@/src/lib/roles";
 
 type NavSubItem = {
   label: string;
@@ -37,7 +37,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   SUPER_ADMIN: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
     {
-      label: "Patient",
+      label: "Patients",
       href: "/patients",
       icon: FaUsers,
       subItems: [
@@ -47,7 +47,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Appointment",
+      label: "Appointments",
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
@@ -57,7 +57,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Payment",
+      label: "Payments",
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
@@ -67,7 +67,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Consultation",
+      label: "Consultations",
       href: "/consultations",
       icon: FaRegMessage,
       subItems: [
@@ -76,7 +76,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Schedule",
+      label: "Schedules",
       href: "/schedules",
       icon: FaStethoscope,
       subItems: [
@@ -84,24 +84,25 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
         { label: "Time Slots", href: "/schedules/slots" },
       ],
     },
-    { label: "Report", href: "/reports", icon: FaChartLine },
-    { label: "Setting", href: "/settings", icon: FaGear },
-    { label: "Help & Center", href: "/help", icon: FaCircleQuestion },
+    { label: "Reports", href: "/reports", icon: FaChartLine },
+    { label: "Settings", href: "/settings", icon: FaGear },
+    { label: "System Roles", href: "/settings", icon: FaShieldHalved },
+    { label: "Help Center", href: "/help", icon: FaCircleQuestion },
   ],
-  ADMIN: [
+  SECRETARY: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
     {
-      label: "Patient",
+      label: "Patients",
       href: "/patients",
       icon: FaUsers,
       subItems: [
         { label: "All Patients", href: "/patients" },
-        { label: "Add Patient", href: "/patients/add" },
+        { label: "Add Walk-In", href: "/patients/add" },
         { label: "Patient Records", href: "/patients/records" },
       ],
     },
     {
-      label: "Appointment",
+      label: "Appointments",
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
@@ -111,7 +112,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Payment",
+      label: "Payments",
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
@@ -121,16 +122,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Consultation",
-      href: "/consultations",
-      icon: FaRegMessage,
-      subItems: [
-        { label: "Online Consultation", href: "/consultations" },
-        { label: "Consultation History", href: "/consultations/history" },
-      ],
-    },
-    {
-      label: "Schedule",
+      label: "Schedules",
       href: "/schedules",
       icon: FaStethoscope,
       subItems: [
@@ -138,23 +130,23 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
         { label: "Time Slots", href: "/schedules/slots" },
       ],
     },
-    { label: "Report", href: "/reports", icon: FaChartLine },
-    { label: "Setting", href: "/settings", icon: FaGear },
-    { label: "Help & Center", href: "/help", icon: FaCircleQuestion },
+    { label: "Reports", href: "/reports", icon: FaChartLine },
+    { label: "Settings", href: "/settings", icon: FaGear },
   ],
   DOCTOR: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
     {
-      label: "Appointment",
+      label: "Appointments",
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
-        { label: "My Appointments", href: "/appointments" },
+        { label: "Manage Appointments", href: "/appointments" },
+        { label: "Appointment List", href: "/appointments/list" },
         { label: "Calendar View", href: "/appointments/calendar" },
       ],
     },
     {
-      label: "Patient",
+      label: "Patients",
       href: "/patients",
       icon: FaUsers,
       subItems: [
@@ -163,7 +155,48 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Consultation",
+      label: "Consultations",
+      href: "/consultations",
+      icon: FaRegMessage,
+      subItems: [
+        { label: "Start Online Consultation", href: "/consultations" },
+        { label: "Consultation History", href: "/consultations/history" },
+      ],
+    },
+    {
+      label: "Schedules",
+      href: "/schedules",
+      icon: FaStethoscope,
+      subItems: [
+        { label: "My Schedule", href: "/schedules" },
+        { label: "Unavailable Dates", href: "/schedules/slots" },
+      ],
+    },
+    {
+      label: "Payments",
+      href: "/payments",
+      icon: FaCreditCard,
+      subItems: [
+        { label: "Online Payment", href: "/payments" },
+        { label: "POS Billing", href: "/payments/pos" },
+      ],
+    },
+    { label: "Reports", href: "/reports", icon: FaChartLine },
+    { label: "Settings", href: "/settings", icon: FaGear },
+  ],
+  PATIENT: [
+    { label: "Dashboard", href: "/dashboard", icon: FaHouse },
+    {
+      label: "Appointments",
+      href: "/appointments",
+      icon: FaCalendarCheck,
+      subItems: [
+        { label: "Book Appointment", href: "/appointments" },
+        { label: "Calendar View", href: "/appointments/calendar" },
+      ],
+    },
+    {
+      label: "Consultations",
       href: "/consultations",
       icon: FaRegMessage,
       subItems: [
@@ -172,67 +205,31 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       ],
     },
     {
-      label: "Schedule",
-      href: "/schedules",
-      icon: FaStethoscope,
-      subItems: [
-        { label: "My Schedule", href: "/schedules" },
-        { label: "Time Slots", href: "/schedules/slots" },
-      ],
-    },
-    { label: "Report", href: "/reports", icon: FaChartLine },
-    { label: "Setting", href: "/settings", icon: FaGear },
-  ],
-  PATIENT: [
-    { label: "Dashboard", href: "/dashboard", icon: FaHouse },
-    {
-      label: "Appointment",
-      href: "/appointments",
-      icon: FaCalendarCheck,
-      subItems: [
-        { label: "Book Appointment", href: "/appointments" },
-        { label: "My Appointments", href: "/appointments/my" },
-      ],
-    },
-    {
-      label: "Patient",
-      href: "/patients",
-      icon: FaUsers,
-      subItems: [
-        { label: "My Records", href: "/patients/records" },
-        { label: "Medical History", href: "/patients/history" },
-      ],
-    },
-    {
-      label: "Consultation",
-      href: "/consultations",
-      icon: FaRegMessage,
-      subItems: [
-        { label: "Online Consultation", href: "/consultations" },
-        { label: "My Consultation", href: "/consultations/my" },
-      ],
-    },
-    {
-      label: "Payment",
+      label: "Payments",
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
-        { label: "Make Payment", href: "/payments" },
-        { label: "Payment History", href: "/payments/history" },
+        { label: "Pay Online", href: "/payments" },
+        { label: "Invoices", href: "/payments/invoices" },
       ],
+    },
+    {
+      label: "Patients",
+      href: "/patients",
+      icon: FaUsers,
+      subItems: [{ label: "My Records", href: "/patients/records" }],
     },
   ],
 };
 
 type SidebarProps = {
-  role?: UserRole;
+  role: UserRole;
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => void;
 };
 
-type ExpandedMenus = {
-  [key: string]: boolean;
-};
+type ExpandedMenus = Record<string, boolean>;
 
 function ChiaraLogo() {
   return (
@@ -245,10 +242,13 @@ function ChiaraLogo() {
   );
 }
 
-export function Sidebar({ role = "ADMIN", isOpen, onClose }: SidebarProps) {
+export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
   const navItems = NAV_BY_ROLE[role];
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState<ExpandedMenus>({});
+  const [expanded, setExpanded] = useState<ExpandedMenus>(
+    Object.fromEntries(navItems.map((item) => [item.label, true])),
+  );
+  const profile = getRoleProfile(role);
 
   const toggleExpand = (label: string) => {
     setExpanded((prev) => ({
@@ -271,31 +271,39 @@ export function Sidebar({ role = "ADMIN", isOpen, onClose }: SidebarProps) {
       />
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-[100svh] max-h-[100svh] w-64 flex-col overflow-hidden border-r border-teal-700 bg-teal-700 shadow-2xl transition-transform duration-300 lg:h-screen lg:max-h-screen lg:translate-x-0 lg:shadow-none ${
+        className={`fixed left-0 top-0 z-40 flex h-[100svh] max-h-[100svh] w-56 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:h-screen lg:max-h-screen lg:translate-x-0 lg:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="shrink-0 border-b border-teal-600 px-4 py-3">
+        <div className="shrink-0 border-b border-slate-200 px-4 py-3 bg-white">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ChiaraLogo />
               <div>
-                <h1 className="text-[1.65rem] font-extrabold leading-5 text-white">Chiara</h1>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-teal-100">
+                <h1 className="text-[1.65rem] font-extrabold leading-5 text-teal-700">Chiara</h1>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-400">
                   Clinic Management
                 </p>
               </div>
             </div>
 
             <button
-              className="rounded-md p-2 text-white hover:bg-teal-600 lg:hidden"
+              className="rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
               onClick={onClose}
               type="button"
               aria-label="Close sidebar"
             >
-              ✕
+              ×
             </button>
           </div>
+        </div>
+
+        <div className="border-b border-slate-200 px-4 py-3 bg-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Active Role
+          </p>
+          <p className="mt-1 text-sm font-semibold text-teal-700">{profile.label}</p>
+          <p className="mt-1 text-xs text-slate-400">{profile.description}</p>
         </div>
 
         <nav className="px-3 py-3">
@@ -306,22 +314,22 @@ export function Sidebar({ role = "ADMIN", isOpen, onClose }: SidebarProps) {
               return (
                 <div key={item.label} className="min-h-0">
                   <div
-                    className={`group flex items-center rounded-xl px-2 py-2 ${
-                      itemActive ? "bg-white/12" : "hover:bg-white/5"
+                    className={`group flex items-center rounded-xl px-2 py-2 transition-colors duration-150 ${
+                      itemActive ? "bg-teal-50" : "hover:bg-slate-100"
                     }`}
                   >
                     <Link href={item.href} className="flex min-w-0 flex-1 items-center gap-2">
                       <item.icon
-                        className={`h-3.5 w-3.5 shrink-0 ${
-                          itemActive ? "text-white" : "text-white opacity-70 group-hover:opacity-100"
+                        className={`h-4 w-4 shrink-0 ${
+                          itemActive ? "text-teal-600" : "text-slate-400 group-hover:text-teal-600"
                         }`}
                         aria-hidden="true"
                       />
                       <span
-                        className={`truncate text-sm leading-4 ${
+                        className={`truncate text-[15px] leading-4 ${
                           itemActive
-                            ? "font-semibold text-white"
-                            : "font-medium text-white opacity-75 group-hover:opacity-100"
+                            ? "font-semibold text-teal-700"
+                            : "font-medium text-slate-700 group-hover:text-teal-700"
                         }`}
                       >
                         {item.label}
@@ -331,7 +339,7 @@ export function Sidebar({ role = "ADMIN", isOpen, onClose }: SidebarProps) {
                     {item.subItems ? (
                       <button
                         type="button"
-                        className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-white opacity-70 transition hover:bg-white/10 hover:opacity-100"
+                        className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-teal-600"
                         onClick={() => toggleExpand(item.label)}
                         aria-label={`Toggle ${item.label} submenu`}
                       >
@@ -345,50 +353,51 @@ export function Sidebar({ role = "ADMIN", isOpen, onClose }: SidebarProps) {
                     ) : null}
                   </div>
 
-                  {item.subItems && expanded[item.label] && (
-                    <div className="ml-6 mt-1 space-y-1 border-l border-white/15 pl-2">
+                  {item.subItems && expanded[item.label] ? (
+                    <div className="ml-6 mt-1 space-y-1 border-l border-slate-200 pl-2">
                       {item.subItems.map((subItem) => (
                         <Link
                           key={subItem.label}
                           href={subItem.href}
-                          className={`block rounded-md px-2 py-1 text-[12px] font-medium leading-4 transition ${
+                          className={`block rounded-md px-2 py-1 text-[13px] font-medium leading-4 transition ${
                             isActive(subItem.href)
-                              ? "bg-white/10 text-white"
-                              : "text-white opacity-70 hover:bg-white/5 hover:opacity-100"
+                              ? "bg-teal-100 text-teal-700"
+                              : "text-slate-500 hover:bg-slate-100 hover:text-teal-700"
                           }`}
                         >
                           {subItem.label}
                         </Link>
                       ))}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
 
             <button
               type="button"
-              className="group flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-white/5"
+              className="group flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-100"
+              onClick={onLogout}
             >
-              <FaArrowRightFromBracket className="h-3.5 w-3.5 shrink-0 text-white opacity-70 group-hover:opacity-100" />
-              <span className="text-sm font-medium leading-4 text-white opacity-75 group-hover:opacity-100">
+              <FaArrowRightFromBracket className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-teal-600" />
+              <span className="text-[15px] font-medium leading-4 text-slate-700 group-hover:text-teal-700">
                 Logout
               </span>
             </button>
           </div>
         </nav>
 
-        <div className="mt-auto border-t border-teal-600 px-4 py-3">
+        <div className="mt-auto border-t border-slate-200 px-4 py-3 bg-white">
           <Link
             href="/settings"
-            className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-teal-600"
+            className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-slate-100"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-teal-200 bg-teal-600 text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700">
               <FaRegUser className="h-4 w-4" aria-hidden="true" />
             </div>
             <div className="leading-tight">
-              <p className="text-[15px] font-semibold text-white">Admin User</p>
-              <p className="text-[13px] text-teal-100">Clinic Account</p>
+              <p className="text-[15px] font-semibold text-teal-700">{profile.label}</p>
+              <p className="text-[13px] text-slate-400">{profile.description}</p>
             </div>
           </Link>
         </div>

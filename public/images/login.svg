@@ -1,0 +1,7 @@
+// This is the login icon SVG based on the provided image.
+// Save as public/images/login.svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" fill="none"/>
+  <path d="M28 12v-4a4 4 0 0 0-4-4h-8a4 4 0 0 0-4 4v32a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-4" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M36 24H16m0 0l6-6m-6 6l6 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
