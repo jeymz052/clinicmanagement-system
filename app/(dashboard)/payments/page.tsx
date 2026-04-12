@@ -41,7 +41,7 @@ export default function OnlinePaymentPage() {
   );
   const paidTodayAmount = onlineAppointments
     .filter((appointment) => appointment.status === "Paid")
-    .reduce((total) => total + getOnlineFee(appointment.queueNumber), 0);
+    .reduce((total, appointment) => total + getOnlineFee(appointment.queueNumber), 0);
   const pendingAmount = pendingAppointments.reduce(
     (total, appointment) => total + getOnlineFee(appointment.queueNumber),
     0,

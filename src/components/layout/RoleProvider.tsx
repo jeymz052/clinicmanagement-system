@@ -46,7 +46,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     let active = true;
 
-    void supabase.auth.getSession().then(({ data, error }) => {
+    void supabase.auth.getSession().then((result: { data: { session: Session | null }, error: any }) => {
+      const { data, error } = result;
       if (!active) {
         return;
       }
@@ -64,7 +65,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((_event: string, nextSession: Session | null) => {
       if (!active) {
         return;
       }
