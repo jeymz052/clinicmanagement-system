@@ -46,7 +46,7 @@ export type SystemSettings = {
 export const INITIAL_UNAVAILABILITY: DoctorUnavailability[] = [
   {
     id: "blk-001",
-    doctorId: "omar-reed",
+    doctorId: "chiara-punzalan",
     date: "2026-04-15",
     reason: "Leave",
     note: "Annual leave",
@@ -59,7 +59,7 @@ export const INITIAL_CONSULTATION_NOTES: ConsultationNote[] = [
   {
     id: "note-001",
     appointmentId: "apt-001",
-    doctorId: "lina-fox",
+    doctorId: "chiara-punzalan",
     patientName: "John Doe",
     note: "Blood pressure stable. Continue current medication.",
     prescription: "Losartan 50mg daily",

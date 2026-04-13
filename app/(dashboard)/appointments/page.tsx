@@ -34,7 +34,7 @@ const INITIAL_FORM: BookingForm = {
   patientName: "",
   email: "",
   phone: "",
-  doctorId: "",
+  doctorId: "chiara-punzalan",
   date: today,
   start: "",
   type: "Clinic",
@@ -63,11 +63,11 @@ export default function BookAppointmentPage() {
   const availableSlots = slotStatuses.filter((s) => s.availableForType);
   const fullSlots = slotStatuses.filter((s) => !s.availableForType);
 
-  // Step tracking
+  // Step tracking (doctor auto-selected — only one doctor)
   const step1Done = !!formData.type;
-  const step2Done = step1Done && !!formData.doctorId;
-  const step3Done = step2Done && !!formData.date && !blockedReason;
-  const step4Done = step3Done && !!formData.start;
+  const step2Done = step1Done && !!formData.date && !blockedReason;
+  const step3Done = step2Done && !!formData.start;
+  const step4Done = step3Done && !!formData.patientName && !!formData.email && !!formData.phone;
 
   function getBlockedLookupForDoctor(doctorId: string) {
     return buildBlockedDayLookup(unavailability, doctorId);
@@ -207,45 +207,19 @@ export default function BookAppointmentPage() {
               </div>
             </section>
 
-            {/* Step 2: Select Doctor */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <StepHeader number={2} title="Select Doctor" done={step2Done} />
-              <div className="grid grid-cols-1 gap-3 mt-4 sm:grid-cols-3">
-                {DOCTORS.map((doctor) => (
-                  <button
-                    key={doctor.id}
-                    type="button"
-                    onClick={() => updateForm("doctorId", doctor.id)}
-                    className={`rounded-xl border-2 p-4 text-left transition-all duration-200 ${
-                      formData.doctorId === doctor.id
-                        ? "border-teal-600 bg-teal-50"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                        formData.doctorId === doctor.id
-                          ? "bg-teal-600 text-white"
-                          : "bg-slate-100 text-slate-500"
-                      }`}>
-                        {doctor.name.split(" ").pop()?.[0]}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${formData.doctorId === doctor.id ? "text-slate-900" : "text-slate-700"}`}>
-                          {doctor.name}
-                        </p>
-                        <p className="text-xs text-slate-500">{doctor.specialty}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+            {/* Doctor info banner */}
+            <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-teal-600 text-white flex items-center justify-center text-sm font-bold shrink-0">P</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{selectedDoctor?.name}</p>
+                <p className="text-xs text-slate-500">{selectedDoctor?.specialty}</p>
               </div>
-            </section>
+            </div>
 
-            {/* Step 3: Select Date */}
-            {step2Done ? (
+            {/* Step 2: Select Date */}
+            {step1Done ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <StepHeader number={3} title="Select Date" done={step3Done} />
+                <StepHeader number={2} title="Select Date" done={step2Done} />
                 <div className="mt-4">
                   <input
                     type="date"
@@ -264,11 +238,11 @@ export default function BookAppointmentPage() {
               </section>
             ) : null}
 
-            {/* Step 4: Select Time Slot */}
-            {step3Done ? (
+            {/* Step 3: Select Time Slot */}
+            {step2Done ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <StepHeader number={4} title="Select Time Slot" done={step4Done} />
+                  <StepHeader number={3} title="Select Time Slot" done={step3Done} />
                   {nextAvailableSlot ? (
                     <button
                       type="button"
@@ -342,10 +316,10 @@ export default function BookAppointmentPage() {
               </section>
             ) : null}
 
-            {/* Step 5: Patient Details */}
-            {step4Done ? (
+            {/* Step 4: Patient Details */}
+            {step3Done ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <StepHeader number={5} title="Patient Details" done={!!formData.patientName && !!formData.email && !!formData.phone} />
+                <StepHeader number={4} title="Patient Details" done={step4Done} />
                 <div className="grid grid-cols-1 gap-4 mt-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Full Name</label>
@@ -421,9 +395,9 @@ export default function BookAppointmentPage() {
 
               <div className="space-y-3">
                 <SummaryRow label="Type" value={formData.type === "Clinic" ? "Clinic Visit" : "Online Consultation"} done={step1Done} />
-                <SummaryRow label="Doctor" value={selectedDoctor?.name ?? "Not selected"} done={step2Done} />
-                <SummaryRow label="Date" value={formData.date ? formatDisplayDate(formData.date) : "Not selected"} done={step3Done} />
-                <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "Not selected"} done={step4Done} />
+                <SummaryRow label="Doctor" value={selectedDoctor?.name ?? "—"} done />
+                <SummaryRow label="Date" value={formData.date ? formatDisplayDate(formData.date) : "Not selected"} done={step2Done} />
+                <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "Not selected"} done={step3Done} />
                 {selectedSlot ? (
                   <SummaryRow label="Queue #" value={String(selectedSlot.nextQueueNumber)} done />
                 ) : null}
@@ -467,10 +441,10 @@ export default function BookAppointmentPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-bold text-slate-900 mb-3">Validation</h3>
               <div className="space-y-2">
-                <CheckItem label="Doctor availability" checked={step2Done && !blockedReason} />
-                <CheckItem label="Schedule type compatibility" checked={step3Done} />
-                <CheckItem label="Max 5 patients per hour" checked={step4Done} />
-                <CheckItem label="No slot conflicts" checked={step4Done} />
+                <CheckItem label="Doctor availability" checked={!blockedReason && !!formData.date} />
+                <CheckItem label="Schedule type compatibility" checked={step2Done} />
+                <CheckItem label="Max 5 patients per hour" checked={step3Done} />
+                <CheckItem label="No slot conflicts" checked={step3Done} />
               </div>
             </div>
           </div>

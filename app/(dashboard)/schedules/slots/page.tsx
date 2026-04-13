@@ -22,7 +22,7 @@ type BlockForm = {
 };
 
 const INITIAL_FORM: BlockForm = {
-  doctorId: "lina-fox",
+  doctorId: "chiara-punzalan",
   date: "2026-04-15",
   reason: "Not Available",
   note: "",
