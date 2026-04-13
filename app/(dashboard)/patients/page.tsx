@@ -1,12 +1,33 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { usePatients } from "@/src/components/clinic/useClinicData";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { PatientRecordItem } from "@/src/lib/clinic";
 
 type PatientDraft = PatientRecordItem;
+
+type NewPatientForm = {
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: string;
+  address: string;
+  emergencyContact: string;
+  isWalkIn: boolean;
+};
+
+const EMPTY_NEW_PATIENT: NewPatientForm = {
+  fullName: "",
+  email: "",
+  phone: "",
+  dateOfBirth: "",
+  gender: "",
+  address: "",
+  emergencyContact: "",
+  isWalkIn: false,
+};
 
 export default function PatientsPage() {
   const { accessToken, role } = useRole();
@@ -15,6 +36,8 @@ export default function PatientsPage() {
   const [draft, setDraft] = useState<PatientDraft | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isMutating, startTransition] = useTransition();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newPatient, setNewPatient] = useState<NewPatientForm>(EMPTY_NEW_PATIENT);
 
   const canManage = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
 
@@ -80,6 +103,36 @@ export default function PatientsPage() {
     });
   }
 
+  function submitNewPatient(event: React.FormEvent) {
+    event.preventDefault();
+    if (!accessToken) {
+      setFeedback("Your session expired. Please sign in again.");
+      return;
+    }
+
+    startTransition(async () => {
+      const response = await fetch("/api/patients", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(newPatient),
+      });
+
+      if (!response.ok) {
+        setFeedback("Unable to add patient.");
+        return;
+      }
+
+      const payload = (await response.json()) as { data: PatientRecordItem[] };
+      setPatients(payload.data);
+      setNewPatient(EMPTY_NEW_PATIENT);
+      setShowAddModal(false);
+      setFeedback("Patient added successfully.");
+    });
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
@@ -88,12 +141,13 @@ export default function PatientsPage() {
           <p className="mt-1 text-base text-slate-600">Manage patient records, walk-ins, and contact information.</p>
         </div>
         {canManage ? (
-          <Link
-            href="/patients/add"
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
             className="rounded-xl bg-teal-700 px-5 py-2.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-teal-800 hover:scale-[1.04] focus:outline-none focus:ring-2 focus:ring-teal-400"
           >
-            Add Walk-In / Patient
-          </Link>
+            + Add Patient
+          </button>
         ) : null}
       </div>
 
@@ -126,6 +180,13 @@ export default function PatientsPage() {
             </tr>
           </thead>
           <tbody>
+            {patients.length === 0 && !isLoading ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                  No patients yet. Click &quot;+ Add Patient&quot; to get started.
+                </td>
+              </tr>
+            ) : null}
             {patients.map((patient) => {
               const isEditing = editingId === patient.id && draft !== null;
               return (
@@ -223,12 +284,6 @@ export default function PatientsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-2">
-                      <Link
-                        href="/patients/records"
-                        className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-all duration-150 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                      >
-                        Records
-                      </Link>
                       {canManage && !isEditing ? (
                         <>
                           <button
@@ -279,6 +334,145 @@ export default function PatientsPage() {
       </div>
 
       {isLoading ? <p className="text-sm text-slate-500">Loading patient records...</p> : null}
+
+      {/* Add Patient Modal */}
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-slate-900">Add New Patient</h2>
+              <button
+                type="button"
+                onClick={() => { setShowAddModal(false); setNewPatient(EMPTY_NEW_PATIENT); }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={submitNewPatient} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={newPatient.fullName}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, fullName: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="Juan Dela Cruz"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newPatient.email}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, email: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="juan@email.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newPatient.phone}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, phone: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="+63 912 345 6789"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={newPatient.dateOfBirth}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                  <select
+                    value={newPatient.gender}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, gender: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    required
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact</label>
+                  <input
+                    type="tel"
+                    value={newPatient.emergencyContact}
+                    onChange={(e) => setNewPatient((p) => ({ ...p, emergencyContact: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="+63 912 345 6780"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                <input
+                  type="text"
+                  value={newPatient.address}
+                  onChange={(e) => setNewPatient((p) => ({ ...p, address: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="123 Main Street, City"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isWalkIn"
+                  checked={newPatient.isWalkIn}
+                  onChange={(e) => setNewPatient((p) => ({ ...p, isWalkIn: e.target.checked }))}
+                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-400"
+                />
+                <label htmlFor="isWalkIn" className="text-sm text-slate-700">Walk-in Patient</label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setNewPatient(EMPTY_NEW_PATIENT); }}
+                  className="rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isMutating}
+                  className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300"
+                >
+                  {isMutating ? "Saving..." : "Save Patient"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

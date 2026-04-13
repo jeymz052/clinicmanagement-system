@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -42,7 +43,6 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       icon: FaUsers,
       subItems: [
         { label: "All Patients", href: "/patients" },
-        { label: "Add Patient", href: "/patients/add" },
         { label: "Patient Records", href: "/patients/records" },
       ],
     },
@@ -97,7 +97,6 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       icon: FaUsers,
       subItems: [
         { label: "All Patients", href: "/patients" },
-        { label: "Add Walk-In", href: "/patients/add" },
         { label: "Patient Records", href: "/patients/records" },
       ],
     },
@@ -231,17 +230,6 @@ type SidebarProps = {
 
 type ExpandedMenus = Record<string, boolean>;
 
-function ChiaraLogo() {
-  return (
-    <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-white text-teal-700 shadow-sm">
-      <span className="text-base font-black leading-none">C</span>
-      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-teal-600 text-[9px] font-bold text-white">
-        +
-      </span>
-    </div>
-  );
-}
-
 export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
   const navItems = NAV_BY_ROLE[role];
   const pathname = usePathname();
@@ -257,8 +245,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
     }));
   };
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+  const isActive = (href: string) => pathname === href;
 
   return (
     <>
@@ -275,18 +262,17 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="shrink-0 border-b border-slate-200 px-4 py-3 bg-white">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <ChiaraLogo />
-              <div>
-                <h1 className="text-[1.65rem] font-extrabold leading-5 text-teal-700">Chiara</h1>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-400">
-                  Clinic Management
-                </p>
-              </div>
-            </div>
-
+        <div className="shrink-0 border-b border-slate-200 px-4 py-2 bg-white">
+          <div className="flex items-center justify-between">
+            <Image
+              src="/images/chiaralogo.png"
+              alt="Chiara Logo"
+              width={180}
+              height={64}
+              priority
+              quality={100}
+              className="object-contain -my-2"
+            />
             <button
               className="rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
               onClick={onClose}
@@ -298,15 +284,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
           </div>
         </div>
 
-        <div className="border-b border-slate-200 px-4 py-3 bg-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Active Role
-          </p>
-          <p className="mt-1 text-sm font-semibold text-teal-700">{profile.label}</p>
-          <p className="mt-1 text-xs text-slate-400">{profile.description}</p>
-        </div>
-
-        <nav className="px-3 py-3">
+        <nav className="flex-1 overflow-y-auto px-3 py-3 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <div className="flex flex-col gap-2.5">
             {navItems.map((item) => {
               const itemActive = isActive(item.href);
@@ -361,7 +339,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
                           href={subItem.href}
                           className={`block rounded-md px-2 py-1 text-[13px] font-medium leading-4 transition ${
                             isActive(subItem.href)
-                              ? "bg-teal-100 text-teal-700"
+                              ? "bg-teal-600 text-white"
                               : "text-slate-500 hover:bg-slate-100 hover:text-teal-700"
                           }`}
                         >
@@ -387,7 +365,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
           </div>
         </nav>
 
-        <div className="mt-auto border-t border-slate-200 px-4 py-3 bg-white">
+        <div className="shrink-0 border-t border-slate-200 px-4 py-3 bg-white">
           <Link
             href="/settings"
             className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-slate-100"
@@ -395,10 +373,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700">
               <FaRegUser className="h-4 w-4" aria-hidden="true" />
             </div>
-            <div className="leading-tight">
-              <p className="text-[15px] font-semibold text-teal-700">{profile.label}</p>
-              <p className="text-[13px] text-slate-400">{profile.description}</p>
-            </div>
+            <p className="text-[15px] font-semibold text-teal-700">{profile.label}</p>
           </Link>
         </div>
       </aside>

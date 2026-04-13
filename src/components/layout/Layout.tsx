@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { RoleProvider, useRole } from "./RoleProvider";
-import { canAccessPath, getRoleProfile } from "@/src/lib/roles";
+import { canAccessPath } from "@/src/lib/roles";
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -23,7 +23,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { role, user, isLoading, signOut } = useRole();
   const pathname = usePathname();
   const router = useRouter();
-  const profile = getRoleProfile(role);
   const hasAccess = canAccessPath(role, pathname);
 
   useEffect(() => {
@@ -69,54 +68,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         onLogout={handleLogout}
       />
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-teal-200 bg-white/85 px-4 py-3 backdrop-blur-md sm:px-6">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="inline-flex items-center rounded-lg border border-teal-300 bg-white p-2 text-teal-600 shadow-sm hover:bg-teal-50 lg:hidden"
-                onClick={() => setIsSidebarOpen(true)}
-                aria-label="Open sidebar"
-              >
-                ≡
-              </button>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Clinic Management System
-                </p>
-                <h2 className="text-lg font-bold text-slate-900">Operations Dashboard</h2>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input
-                className="hidden w-64 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none ring-teal-200 transition placeholder:text-slate-400 focus:ring lg:block"
-                placeholder="Search patient, invoice, doctor..."
-                aria-label="Search"
-              />
-
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Signed In As
-                </p>
-                <p className="text-sm font-medium text-slate-800">{user.email}</p>
-              </div>
-
-              <button
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                type="button"
-              >
-                Alerts
-              </button>
-
-              <div className="flex items-center gap-2 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white">
-                <span>{profile.shortLabel}</span>
-                <span className="hidden sm:inline">{profile.label}</span>
-              </div>
-            </div>
-          </div>
-        </header>
+      <div className="lg:pl-56">
+        {/* Mobile sidebar toggle */}
+        <div className="sticky top-0 z-20 flex items-center px-4 py-2 lg:hidden bg-white border-b border-slate-200">
+          <button
+            type="button"
+            className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm hover:bg-slate-50"
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
+            ≡
+          </button>
+        </div>
 
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">{children}</main>
       </div>

@@ -84,35 +84,56 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-slate-950 overflow-hidden">
+    <main className="relative min-h-screen flex items-center justify-end bg-slate-950 overflow-hidden pr-8 md:pr-20 lg:pr-32">
+      {/* Full-screen background image */}
       <Image
-        src="/images/clincicsystembg.jpg"
+        src="/images/chiarabg.png"
         alt="Clinic consultation background"
         fill
         priority
+        quality={100}
         className="object-cover object-center"
+        sizes="100vw"
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-teal-950/65 to-cyan-100/30" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.24),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.15),transparent_28%)]" />
+      {/* Subtle overlay to keep text readable */}
+      <div className="absolute inset-0 bg-black/15" />
 
-      <section className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200/60 bg-white/5 p-10 shadow-lg shadow-black/20">
-        <div className="flex flex-col items-center text-center mb-6" style={{ fontFamily: 'Inter, Segoe UI, Arial, sans-serif' }}>
-          <p className="text-3xl font-extrabold text-slate-900 drop-shadow mb-1">
-            {mode === "signin" ? "Sign In" : "Sign Up"}
-          </p>
-          <h2 className="text-lg font-bold text-teal-500 tracking-widest uppercase">
-            CHIARA CLINIC MANAGEMENT SYSTEM
-          </h2>
+      {/* Login card - glassmorphism matching reference */}
+      <section className="relative z-10 w-full max-w-xs rounded-2xl border-2 border-teal-700/50 bg-transparent backdrop-blur-[2px] shadow-xl p-5 overflow-hidden">
+
+        {/* Content */}
+        <div className="relative z-10">
+        {/* Logo — negative margin trims transparent padding baked into the PNG */}
+        <div className="flex justify-center -mb-4 overflow-hidden">
+          <Image
+            src="/images/chiaralogo.png"
+            alt="Chiara Logo"
+            width={280}
+            height={100}
+            priority
+            quality={100}
+            className="object-contain drop-shadow-lg -mt-6 -mb-6"
+          />
         </div>
 
-        <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+        {/* Heading */}
+        <div className="text-center mb-3" style={{ fontFamily: 'Inter, Segoe UI, Arial, sans-serif' }}>
+          <p className="text-xl font-extrabold text-white drop-shadow">
+            {mode === "signin" ? "Welcome Back!" : "Create Account"}
+          </p>
+          <p className="text-xs text-white/80 mt-0.5">
+            {mode === "signin" ? "Sign in to continue your journey" : "Fill in your details to get started"}
+          </p>
+        </div>
+
+        <form className="space-y-3" onSubmit={handleSubmit}>
           {mode === "signup" ? (
             <Field label="Full Name">
               <input
                 type="text"
                 value={formData.fullName}
                 onChange={(event) => updateField("fullName", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white/95 px-4 py-3 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
+                className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
                 placeholder="Juan Dela Cruz"
                 required
               />
@@ -124,7 +145,7 @@ export default function LoginPage() {
               type="email"
               value={formData.email}
               onChange={(event) => updateField("email", event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white/95 px-4 py-3 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
+              className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
               placeholder="name@clinicmail.com"
               required
             />
@@ -135,7 +156,7 @@ export default function LoginPage() {
               type="password"
               value={formData.password}
               onChange={(event) => updateField("password", event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white/95 px-4 py-3 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
+              className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
               placeholder="••••••••"
               required
             />
@@ -146,10 +167,10 @@ export default function LoginPage() {
               <select
                 value={formData.role}
                 onChange={(event) => updateField("role", event.target.value as UserRole)}
-                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white/95 px-4 py-3 text-slate-900 outline-none ring-teal-400 transition focus:ring shadow-sm"
+                className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
               >
                 {ROLE_PROFILES.map((profile) => (
-                  <option key={profile.role} value={profile.role}>
+                  <option key={profile.role} value={profile.role} className="bg-slate-800 text-white">
                     {profile.label}
                   </option>
                 ))}
@@ -158,7 +179,7 @@ export default function LoginPage() {
           ) : null}
 
           {feedback ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
               {feedback}
             </div>
           ) : null}
@@ -166,15 +187,15 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-3 font-semibold text-white shadow-lg shadow-teal-900/10 transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-teal-300"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/30 transition hover:bg-teal-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-teal-800 disabled:text-teal-300"
           >
             {mode === "signin" ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h13m0 0l-4-4m4 4l-4 4" />
                 <rect x="16" y="6" width="5" height="12" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                 <circle cx="8.5" cy="7" r="4" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20 8v6m3-3h-6" />
@@ -190,30 +211,31 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8 text-center">
+        <div className="mt-3 text-center">
           {mode === "signin" ? (
-            <p className="text-base text-slate-100/90">
+            <p className="text-sm text-white">
               Don&apos;t have an account?{' '}
               <button
                 type="button"
-                className="text-teal-300 font-bold hover:underline inline-flex items-center gap-1"
+                className="text-white font-semibold hover:underline"
                 onClick={() => { setMode('signup'); setFeedback(null); }}
               >
                 Sign Up
               </button>
             </p>
           ) : (
-            <p className="text-base text-slate-100/90">
+            <p className="text-sm text-white">
               Already have an account?{' '}
               <button
                 type="button"
-                className="text-teal-300 font-bold hover:underline inline-flex items-center gap-1"
+                className="text-white font-semibold hover:underline"
                 onClick={() => { setMode('signin'); setFeedback(null); }}
               >
                 Sign In
               </button>
             </p>
           )}
+        </div>
         </div>
       </section>
     </main>
@@ -228,7 +250,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block text-base font-bold text-slate-900 mb-1 tracking-wide drop-shadow-sm">
+    <label className="block text-sm font-semibold text-white mb-1 tracking-wide">
       {label}
       {children}
     </label>

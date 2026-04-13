@@ -53,44 +53,7 @@ export const INITIAL_UNAVAILABILITY: DoctorUnavailability[] = [
   },
 ];
 
-export const INITIAL_PATIENTS: PatientRecordItem[] = [
-  {
-    id: "pat-001",
-    fullName: "John Doe",
-    email: "john@example.com",
-    phone: "+1 (555) 010-1001",
-    dateOfBirth: "1989-03-15",
-    gender: "Male",
-    address: "12 Maple Street",
-    emergencyContact: "+1 (555) 010-2001",
-    isWalkIn: false,
-    status: "Active",
-  },
-  {
-    id: "pat-002",
-    fullName: "Maria Santos",
-    email: "maria@example.com",
-    phone: "+1 (555) 010-1002",
-    dateOfBirth: "1992-07-21",
-    gender: "Female",
-    address: "88 Green Avenue",
-    emergencyContact: "+1 (555) 010-2002",
-    isWalkIn: false,
-    status: "Active",
-  },
-  {
-    id: "pat-003",
-    fullName: "Paul Tan",
-    email: "paul@example.com",
-    phone: "+1 (555) 010-1005",
-    dateOfBirth: "1978-11-03",
-    gender: "Male",
-    address: "7 Pine Close",
-    emergencyContact: "+1 (555) 010-2005",
-    isWalkIn: true,
-    status: "Active",
-  },
-];
+export const INITIAL_PATIENTS: PatientRecordItem[] = [];
 
 export const INITIAL_CONSULTATION_NOTES: ConsultationNote[] = [
   {

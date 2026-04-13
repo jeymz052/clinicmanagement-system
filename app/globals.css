@@ -16,6 +16,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Hide scrollbar but keep scrollable */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 html,
 body {
   min-height: 100%;
