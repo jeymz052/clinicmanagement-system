@@ -92,7 +92,7 @@ export default function LoginPage() {
         fill
         priority
         quality={100}
-        className="object-cover object-center"
+        className="object-cover object-left md:object-center"
         sizes="100vw"
       />
       {/* Subtle overlay to keep text readable */}

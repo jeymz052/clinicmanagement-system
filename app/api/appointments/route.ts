@@ -5,7 +5,9 @@ import {
   createPersistedAppointment,
   markAppointmentPaid,
   readAppointments,
+  type AppointmentFilter,
 } from "@/src/lib/server/appointments-store";
+import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 async function authenticateRequest(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -24,6 +26,25 @@ async function authenticateRequest(request: Request) {
   }
 }
 
+async function buildRoleFilter(
+  user: { user: { id: string; email?: string }; role: string },
+): Promise<AppointmentFilter> {
+  if (user.role === "PATIENT") {
+    return { patientId: user.user.id };
+  }
+  if (user.role === "DOCTOR") {
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from("doctors")
+      .select("id")
+      .eq("id", user.user.id)
+      .maybeSingle<{ id: string }>();
+    if (data) return { doctorId: data.id };
+    return { doctorId: "__none__" };
+  }
+  return {};
+}
+
 export async function GET(request: Request) {
   const authenticatedUser = await authenticateRequest(request);
 
@@ -31,7 +52,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const appointments = await readAppointments();
+  const filter = await buildRoleFilter(authenticatedUser);
+  const appointments = await readAppointments(filter);
 
   return NextResponse.json({ appointments });
 }

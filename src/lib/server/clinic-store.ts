@@ -1,131 +1,355 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import {
-  INITIAL_CONSULTATION_NOTES,
-  INITIAL_PATIENTS,
+  getDoctorSlugById,
+  resolveDoctorIdBySlug,
+} from "@/src/lib/server/legacy-bridge";
+import {
   INITIAL_SYSTEM_SETTINGS,
-  INITIAL_UNAVAILABILITY,
+  type AvailabilityReason,
   type ConsultationNote,
   type DoctorUnavailability,
   type PatientRecordItem,
   type SystemSettings,
 } from "@/src/lib/clinic";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const UNAVAILABILITY_FILE = path.join(DATA_DIR, "doctor-unavailability.json");
-const PATIENTS_FILE = path.join(DATA_DIR, "patients.json");
-const NOTES_FILE = path.join(DATA_DIR, "consultation-notes.json");
-const SETTINGS_FILE = path.join(DATA_DIR, "system-settings.json");
-
-async function ensureFile<T>(filePath: string, initialData: T) {
-  try {
-    await fs.access(filePath);
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(initialData, null, 2), "utf8");
+function daysBetween(startIso: string, endIso: string): string[] {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const days: string[] = [];
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  while (cursor < end) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
+  return days;
 }
 
-async function readJson<T>(filePath: string, initialData: T) {
-  await ensureFile(filePath, initialData);
-  const raw = await fs.readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
+function normalizeReason(raw: string | null): AvailabilityReason {
+  if (raw && raw.toLowerCase() === "leave") return "Leave";
+  return "Not Available";
 }
 
-async function writeJson<T>(filePath: string, value: T) {
-  await ensureFile(filePath, value);
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
+export async function readDoctorUnavailability(): Promise<DoctorUnavailability[]> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("doctor_unavailability")
+    .select("id, doctor_id, starts_at, ends_at, reason");
+  if (error) throw error;
 
-export async function readDoctorUnavailability() {
-  return readJson<DoctorUnavailability[]>(UNAVAILABILITY_FILE, INITIAL_UNAVAILABILITY);
+  const doctorIds = [...new Set((data ?? []).map((r) => r.doctor_id as string))];
+  const slugEntries = await Promise.all(
+    doctorIds.map(async (id) => [id, (await getDoctorSlugById(id)) ?? id] as const),
+  );
+  const slugs = new Map(slugEntries);
+
+  const expanded: DoctorUnavailability[] = [];
+  for (const row of data ?? []) {
+    const r = row as {
+      id: string;
+      doctor_id: string;
+      starts_at: string;
+      ends_at: string;
+      reason: string | null;
+    };
+    const slug = slugs.get(r.doctor_id) ?? r.doctor_id;
+    const reason = normalizeReason(r.reason);
+    const note = r.reason ?? "";
+    for (const day of daysBetween(r.starts_at, r.ends_at)) {
+      expanded.push({
+        id: `${r.id}|${day}`,
+        doctorId: slug,
+        date: day,
+        reason,
+        note,
+      });
+    }
+  }
+  return expanded;
 }
 
 export async function addDoctorUnavailability(
   payload: Omit<DoctorUnavailability, "id">,
-) {
-  const current = await readDoctorUnavailability();
-  const nextRecord: DoctorUnavailability = {
-    ...payload,
-    id: `blk-${String(current.length + 1).padStart(3, "0")}`,
+): Promise<DoctorUnavailability[]> {
+  const supabase = getSupabaseAdmin();
+  const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
+  const starts_at = `${payload.date}T00:00:00Z`;
+  const endDate = new Date(`${payload.date}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  const ends_at = endDate.toISOString();
+
+  const { error } = await supabase.from("doctor_unavailability").insert({
+    doctor_id: doctorUuid,
+    starts_at,
+    ends_at,
+    reason: payload.note || payload.reason,
+  });
+  if (error) throw error;
+  return readDoctorUnavailability();
+}
+
+export async function deleteDoctorUnavailability(
+  id: string,
+): Promise<DoctorUnavailability[]> {
+  const supabase = getSupabaseAdmin();
+  const [blockId] = id.split("|");
+  const { error } = await supabase.from("doctor_unavailability").delete().eq("id", blockId);
+  if (error) throw error;
+  return readDoctorUnavailability();
+}
+
+// ============ PATIENTS (v2 via profiles+patients) ============
+
+type PatientJoinRow = {
+  id: string;
+  dob: string | null;
+  gender: string | null;
+  address: string | null;
+  emergency_contact: string | null;
+  profiles: {
+    full_name: string;
+    email: string;
+    phone: string | null;
+    is_active: boolean;
+  } | null;
+};
+
+function mapPatientRow(row: PatientJoinRow): PatientRecordItem {
+  return {
+    id: row.id,
+    fullName: row.profiles?.full_name ?? "Unknown",
+    email: row.profiles?.email ?? "",
+    phone: row.profiles?.phone ?? "",
+    dateOfBirth: row.dob ?? "",
+    gender: row.gender ?? "",
+    address: row.address ?? "",
+    emergencyContact: row.emergency_contact ?? "",
+    isWalkIn: false,
+    status: row.profiles?.is_active === false ? "Inactive" : "Active",
   };
-  const next = [...current, nextRecord];
-  await writeJson(UNAVAILABILITY_FILE, next);
-  return next;
 }
 
-export async function deleteDoctorUnavailability(id: string) {
-  const current = await readDoctorUnavailability();
-  const next = current.filter((record) => record.id !== id);
-  await writeJson(UNAVAILABILITY_FILE, next);
-  return next;
+export async function readPatients(): Promise<PatientRecordItem[]> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("patients")
+    .select("id, dob, gender, address, emergency_contact, profiles!inner(full_name, email, phone, is_active)")
+    .order("id");
+  if (error) throw error;
+  return (data ?? []).map((row) => mapPatientRow(row as unknown as PatientJoinRow));
 }
 
-export async function readPatients() {
-  return readJson<PatientRecordItem[]>(PATIENTS_FILE, INITIAL_PATIENTS);
+export async function createPatient(
+  payload: Omit<PatientRecordItem, "id" | "status">,
+): Promise<PatientRecordItem[]> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", payload.email.toLowerCase())
+    .maybeSingle<{ id: string }>();
+
+  let userId = existing?.id ?? null;
+  if (!userId) {
+    const { data: created, error } = await supabase.auth.admin.createUser({
+      email: payload.email,
+      password: randomUUID(),
+      email_confirm: true,
+      user_metadata: { full_name: payload.fullName, role: "patient" },
+    });
+    if (error || !created.user) throw error ?? new Error("Failed to create patient");
+    userId = created.user.id;
+  }
+
+  // Triggers create profile + patient. Patch fields with the values from the form.
+  await supabase
+    .from("profiles")
+    .update({
+      full_name: payload.fullName,
+      phone: payload.phone,
+      is_active: true,
+    })
+    .eq("id", userId);
+
+  await supabase
+    .from("patients")
+    .upsert({
+      id: userId,
+      dob: payload.dateOfBirth || null,
+      gender: payload.gender || null,
+      address: payload.address || null,
+      emergency_contact: payload.emergencyContact || null,
+    });
+
+  return readPatients();
 }
 
-export async function createPatient(payload: Omit<PatientRecordItem, "id" | "status">) {
-  const current = await readPatients();
-  const nextPatient: PatientRecordItem = {
-    ...payload,
-    id: `pat-${String(current.length + 1).padStart(3, "0")}`,
-    status: "Active",
+export async function updatePatient(
+  updatedPatient: PatientRecordItem,
+): Promise<PatientRecordItem[]> {
+  const supabase = getSupabaseAdmin();
+  const profileUpdate = {
+    full_name: updatedPatient.fullName,
+    phone: updatedPatient.phone,
+    is_active: updatedPatient.status !== "Inactive",
   };
-  const next = [...current, nextPatient];
-  await writeJson(PATIENTS_FILE, next);
-  return next;
+  await supabase.from("profiles").update(profileUpdate).eq("id", updatedPatient.id);
+  await supabase
+    .from("patients")
+    .update({
+      dob: updatedPatient.dateOfBirth || null,
+      gender: updatedPatient.gender || null,
+      address: updatedPatient.address || null,
+      emergency_contact: updatedPatient.emergencyContact || null,
+    })
+    .eq("id", updatedPatient.id);
+  return readPatients();
 }
 
-export async function updatePatient(updatedPatient: PatientRecordItem) {
-  const current = await readPatients();
-  const next = current.map((patient) =>
-    patient.id === updatedPatient.id ? updatedPatient : patient,
+export async function deletePatient(id: string): Promise<PatientRecordItem[]> {
+  const supabase = getSupabaseAdmin();
+  // Soft-delete: deactivate profile. Keeps audit trail, prevents cascading appt deletion.
+  await supabase.from("profiles").update({ is_active: false }).eq("id", id);
+  return readPatients();
+}
+
+// ============ CONSULTATION NOTES (v2) ============
+
+type NoteJoinRow = {
+  id: string;
+  appointment_id: string;
+  doctor_id: string;
+  chief_complaint: string | null;
+  diagnosis: string | null;
+  prescription: string | null;
+  notes: string | null;
+  updated_at: string;
+  appointments: {
+    status: string;
+    patient_id: string;
+    profiles: { full_name: string } | null;
+  } | null;
+};
+
+function deriveLegacyNoteStatus(apptStatus: string): ConsultationNote["status"] {
+  if (apptStatus === "Completed") return "Completed";
+  if (apptStatus === "InProgress") return "In Progress";
+  return "Ready";
+}
+
+async function mapNoteRow(row: NoteJoinRow, slugsById: Map<string, string>): Promise<ConsultationNote> {
+  return {
+    id: row.id,
+    appointmentId: row.appointment_id,
+    doctorId: slugsById.get(row.doctor_id) ?? row.doctor_id,
+    patientName: row.appointments?.profiles?.full_name ?? "Unknown",
+    note: row.notes ?? "",
+    prescription: row.prescription ?? "",
+    status: deriveLegacyNoteStatus(row.appointments?.status ?? ""),
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function readConsultationNotes(): Promise<ConsultationNote[]> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("consultation_notes")
+    .select(`
+      id, appointment_id, doctor_id, chief_complaint, diagnosis, prescription, notes, updated_at,
+      appointments!inner(status, patient_id, profiles:patient_id(full_name))
+    `)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as NoteJoinRow[];
+  const doctorIds = [...new Set(rows.map((r) => r.doctor_id))];
+  const slugEntries = await Promise.all(
+    doctorIds.map(async (id) => [id, (await getDoctorSlugById(id)) ?? id] as const),
   );
-  await writeJson(PATIENTS_FILE, next);
-  return next;
-}
+  const slugs = new Map(slugEntries);
 
-export async function deletePatient(id: string) {
-  const current = await readPatients();
-  const next = current.filter((patient) => patient.id !== id);
-  await writeJson(PATIENTS_FILE, next);
-  return next;
-}
-
-export async function readConsultationNotes() {
-  return readJson<ConsultationNote[]>(NOTES_FILE, INITIAL_CONSULTATION_NOTES);
+  return Promise.all(rows.map((r) => mapNoteRow(r, slugs)));
 }
 
 export async function upsertConsultationNote(
   payload: Omit<ConsultationNote, "id" | "updatedAt"> & { id?: string },
-) {
-  const current = await readConsultationNotes();
-  const nextNote: ConsultationNote = {
-    ...payload,
-    id: payload.id ?? `note-${String(current.length + 1).padStart(3, "0")}`,
-    updatedAt: new Date().toISOString(),
+): Promise<ConsultationNote[]> {
+  const supabase = getSupabaseAdmin();
+  const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
+
+  await supabase.from("consultation_notes").upsert(
+    {
+      appointment_id: payload.appointmentId,
+      doctor_id: doctorUuid,
+      notes: payload.note,
+      prescription: payload.prescription,
+    },
+    { onConflict: "appointment_id" },
+  );
+
+  // Reflect the legacy status into the v2 appointment status machine.
+  const newStatus =
+    payload.status === "Completed"
+      ? "Completed"
+      : payload.status === "In Progress"
+        ? "InProgress"
+        : null;
+  if (newStatus) {
+    await supabase
+      .from("appointments")
+      .update({ status: newStatus })
+      .eq("id", payload.appointmentId);
+  }
+
+  return readConsultationNotes();
+}
+
+export async function deleteConsultationNote(id: string): Promise<ConsultationNote[]> {
+  const supabase = getSupabaseAdmin();
+  await supabase.from("consultation_notes").delete().eq("id", id);
+  return readConsultationNotes();
+}
+
+export async function readSystemSettings(): Promise<SystemSettings> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("system_settings")
+    .select("*")
+    .eq("id", true)
+    .maybeSingle<{
+      clinic_name: string;
+      email: string;
+      phone: string;
+      address: string;
+      online_consultation_fee: number;
+      max_patients_per_hour: number;
+    }>();
+  if (!data) return INITIAL_SYSTEM_SETTINGS;
+  return {
+    clinicName: data.clinic_name,
+    email: data.email,
+    phone: data.phone,
+    address: data.address,
+    onlineConsultationFee: Number(data.online_consultation_fee),
+    maxPatientsPerHour: data.max_patients_per_hour,
   };
-  const exists = current.some((note) => note.id === nextNote.id);
-  const next = exists
-    ? current.map((note) => (note.id === nextNote.id ? nextNote : note))
-    : [...current, nextNote];
-  await writeJson(NOTES_FILE, next);
-  return next;
 }
 
-export async function deleteConsultationNote(id: string) {
-  const current = await readConsultationNotes();
-  const next = current.filter((note) => note.id !== id);
-  await writeJson(NOTES_FILE, next);
-  return next;
-}
-
-export async function readSystemSettings() {
-  return readJson<SystemSettings>(SETTINGS_FILE, INITIAL_SYSTEM_SETTINGS);
-}
-
-export async function saveSystemSettings(settings: SystemSettings) {
-  await writeJson(SETTINGS_FILE, settings);
-  return settings;
+export async function saveSystemSettings(settings: SystemSettings): Promise<SystemSettings> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("system_settings")
+    .update({
+      clinic_name: settings.clinicName,
+      email: settings.email,
+      phone: settings.phone,
+      address: settings.address,
+      online_consultation_fee: settings.onlineConsultationFee,
+      max_patients_per_hour: settings.maxPatientsPerHour,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", true);
+  if (error) throw error;
+  return readSystemSettings();
 }
