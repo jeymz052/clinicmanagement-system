@@ -363,13 +363,14 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-fade-in-down">
         <h1 className="text-2xl font-bold text-slate-900">{greeting.greeting}</h1>
         <p className="text-sm text-slate-500 mt-0.5">{greeting.subtitle}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 p-5 shadow-md text-white transition-all duration-300 hover:shadow-xl hover:scale-[1.03]">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 p-5 shadow-md text-white transition-all duration-300 hover:shadow-xl hover:scale-[1.03] animate-fade-in-up stagger-1">
+          <div className="absolute -top-8 -right-8 h-24 w-24 rounded-full bg-white/10 animate-float-slow" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Total Patients</p>
             <span className="text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{activePatients} active</span>
@@ -380,7 +381,8 @@ export default function AdminDashboard() {
           <ProgressBar value={activePatients} max={Math.max(1, totalPatients)} color="#ffffff" />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-200">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-300 animate-fade-in-up stagger-2">
+          <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-teal-500 opacity-10" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Appointments</p>
             <span className="text-xs font-semibold text-emerald-600">today</span>
@@ -391,7 +393,8 @@ export default function AdminDashboard() {
           <ProgressBar value={todayAppointments.length} max={25} color="#14b8a6" />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-200">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-sky-300 animate-fade-in-up stagger-3">
+          <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-sky-500 opacity-10" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Online Consults</p>
             <span className="text-xs font-semibold text-emerald-600">today</span>
@@ -405,7 +408,8 @@ export default function AdminDashboard() {
           <ProgressBar value={onlineConsultsToday} max={15} color="#38bdf8" />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-200">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-amber-300 animate-fade-in-up stagger-4">
+          <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-amber-500 opacity-10" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Payments</p>
             <span className="text-xs font-semibold text-amber-600">all time</span>
@@ -418,7 +422,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-teal-200">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Patient Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
@@ -442,7 +446,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-teal-200">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Appointment Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
@@ -463,7 +467,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-teal-200">
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover-lift animate-fade-in-up stagger-7">
         <h3 className="text-base font-bold text-slate-900 mb-3">Overview</h3>
         <div className="grid grid-cols-3 divide-x divide-slate-100">
           <DonutSection title="Appointment Types" data={appointmentTypeData} colors={DONUT_COLORS_APPOINTMENT} />
@@ -473,15 +477,15 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6 transition-all duration-300 hover:shadow-lg hover:border-teal-200">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6 hover-lift animate-fade-in-up stagger-8">
           <Calendar appointments={appointments} />
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-teal-200">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-8">
           <ActivityDetails appointments={appointments} />
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-8">
         <h2 className="text-base font-bold text-slate-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickAction label="Book Appointment" href="/appointments" color="teal" />
@@ -502,8 +506,12 @@ function QuickAction({ label, href, color }: { label: string; href: string; colo
     amber: "border-amber-200 hover:bg-amber-50 hover:border-amber-400 text-amber-700",
   };
   return (
-    <Link href={href} className={`flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] ${colorMap[color]}`}>
-      {label}
+    <Link
+      href={href}
+      className={`group flex items-center justify-center gap-1.5 rounded-xl border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md ${colorMap[color]}`}
+    >
+      <span>{label}</span>
+      <span className="opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0">→</span>
     </Link>
   );
 }

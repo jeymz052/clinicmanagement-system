@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
-import { INITIAL_APPOINTMENTS, type AppointmentRecord } from "@/src/lib/appointments";
+import { type AppointmentRecord } from "@/src/lib/appointments";
 
 export function useAppointments() {
   const { accessToken, isLoading: isAuthLoading } = useRole();
-  const [appointments, setAppointments] = useState<AppointmentRecord[]>(INITIAL_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +28,8 @@ export function useAppointments() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to load appointments.");
+          const body = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(body.message ?? `Failed to load appointments (HTTP ${response.status})`);
         }
 
         const data = (await response.json()) as { appointments: AppointmentRecord[] };

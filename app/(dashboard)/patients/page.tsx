@@ -135,7 +135,7 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 animate-fade-in-down">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Patients</h1>
           <p className="mt-1 text-base text-slate-600">Manage patient records, walk-ins, and contact information.</p>
@@ -163,12 +163,12 @@ export default function PatientsPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Summary label="Total Patients" value={patients.length.toString()} />
-        <Summary label="Walk-Ins" value={patients.filter((patient) => patient.isWalkIn).length.toString()} />
-        <Summary label="Active" value={patients.filter((patient) => patient.status === "Active").length.toString()} />
+        <div className="animate-fade-in-up stagger-1"><Summary label="Total Patients" value={patients.length.toString()} tone="teal" /></div>
+        <div className="animate-fade-in-up stagger-2"><Summary label="Walk-Ins" value={patients.filter((patient) => patient.isWalkIn).length.toString()} tone="amber" /></div>
+        <div className="animate-fade-in-up stagger-3"><Summary label="Active" value={patients.filter((patient) => patient.status === "Active").length.toString()} tone="emerald" /></div>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md hover-lift animate-fade-in-up stagger-4">
         <table className="w-full text-left text-base">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
@@ -477,9 +477,23 @@ export default function PatientsPage() {
   );
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
+function Summary({
+  label,
+  value,
+  tone = "teal",
+}: {
+  label: string;
+  value: string;
+  tone?: "teal" | "amber" | "emerald";
+}) {
+  const accent = {
+    teal: "bg-teal-500",
+    amber: "bg-amber-500",
+    emerald: "bg-emerald-500",
+  };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md transition-all duration-200 hover:bg-teal-50 hover:border-teal-300 hover:scale-[1.04] animate-fade-in">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-md hover-lift">
+      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className="mt-3 text-3xl font-extrabold text-slate-900">{value}</p>
     </div>

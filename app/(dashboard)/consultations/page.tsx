@@ -93,7 +93,7 @@ export default function OnlineConsultationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-fade-in-down">
         <h1 className="text-3xl font-bold text-slate-900">Consultations</h1>
         <p className="mt-1 text-sm text-slate-500">
           Start paid online consultations, add consultation notes, and track progress.
@@ -101,9 +101,15 @@ export default function OnlineConsultationPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Metric label="Ready Online Consultations" value={onlineReady.length.toString()} tone="sky" />
-        <Metric label="Consultation Notes Saved" value={notes.length.toString()} tone="emerald" />
-        <Metric label="Completed Notes" value={completedCount.toString()} tone="slate" />
+        <div className="animate-fade-in-up stagger-1">
+          <Metric label="Ready Online Consultations" value={onlineReady.length.toString()} tone="sky" />
+        </div>
+        <div className="animate-fade-in-up stagger-2">
+          <Metric label="Consultation Notes Saved" value={notes.length.toString()} tone="emerald" />
+        </div>
+        <div className="animate-fade-in-up stagger-3">
+          <Metric label="Completed Notes" value={completedCount.toString()} tone="slate" />
+        </div>
       </div>
 
       {feedback ? (
@@ -118,24 +124,41 @@ export default function OnlineConsultationPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr,0.95fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-4">
           <h2 className="text-lg font-bold text-slate-900">Consultation Queue</h2>
           <div className="mt-5 space-y-4">
-            {eligibleAppointments.map((appointment) => {
+            {eligibleAppointments.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-10 text-center">
+                <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
+                  <svg className="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-slate-400">No consultations ready yet.</p>
+              </div>
+            ) : null}
+            {eligibleAppointments.map((appointment, i) => {
               const doctor = getDoctorById(appointment.doctorId);
               const note = notes.find((item) => item.appointmentId === appointment.id);
               const isActive = activeAppointmentId === appointment.id;
 
               return (
-                <div key={appointment.id} className="rounded-2xl border border-slate-200 p-4">
+                <div
+                  key={appointment.id}
+                  className={`rounded-2xl border border-slate-200 p-4 transition-all hover:border-teal-300 hover:shadow-md animate-slide-in-left stagger-${Math.min(i + 1, 6)} ${
+                    isActive ? "ring-2 ring-teal-300 border-teal-300" : ""
+                  }`}
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="font-semibold text-slate-900">{appointment.patientName}</p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {doctor?.name} | {formatDisplayDate(appointment.date)} |{" "}
+                        {doctor?.name} · {formatDisplayDate(appointment.date)} ·{" "}
                         {formatRange(appointment.start, appointment.end)}
                       </p>
-                      <p className="mt-2 text-sm text-slate-500">{appointment.reason}</p>
+                      {appointment.reason ? (
+                        <p className="mt-2 text-sm text-slate-500 italic">&quot;{appointment.reason}&quot;</p>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge tone={appointment.type === "Online" ? "sky" : "emerald"}>
@@ -151,7 +174,7 @@ export default function OnlineConsultationPage() {
                     <button
                       type="button"
                       onClick={() => openConsultation(appointment)}
-                      className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+                      className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 transition-all hover:scale-[1.02]"
                     >
                       {appointment.meetingLink ? "Start Online Consultation" : "Open Note Editor"}
                     </button>
@@ -160,9 +183,9 @@ export default function OnlineConsultationPage() {
                         href={appointment.meetingLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700"
+                        className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 transition-colors"
                       >
-                        Meeting Link
+                        Meeting Link →
                       </a>
                     ) : null}
                   </div>
@@ -236,7 +259,7 @@ export default function OnlineConsultationPage() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5 sticky top-4">
           <h2 className="text-lg font-bold text-slate-900">Workflow Rules</h2>
           <div className="mt-5 space-y-3 text-sm text-slate-600">
             <Rule text="Paid online consultations can be started immediately from this page." />
@@ -265,10 +288,16 @@ function Metric({
     emerald: "text-emerald-600",
     slate: "text-slate-900",
   };
+  const accent = {
+    sky: "bg-sky-500",
+    emerald: "bg-emerald-500",
+    slate: "bg-slate-400",
+  };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover-lift">
+      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p className={`mt-2 text-3xl font-bold ${styles[tone]}`}>{value}</p>
     </div>
   );

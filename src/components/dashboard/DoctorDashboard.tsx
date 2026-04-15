@@ -57,30 +57,37 @@ export default function DoctorDashboard() {
     [appointments, notes],
   );
 
-  const totalCompletedAllTime = appointments.filter((a) => a.status === "Completed").length;
-  const cancelledOrNoShow = 0; // v2 soft-deletes; bridge filters these out already
-  const totalSeen = totalCompletedAllTime;
+  const totalSeen = appointments.filter((a) => a.status === "Completed").length;
 
   const nextInQueue = todayQueue.find((a) => a.status !== "Completed");
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-fade-in-down">
         <h1 className="text-2xl font-bold text-slate-900">Good day, {name}</h1>
         <p className="text-sm text-slate-500 mt-0.5">Your queue and consultations for today.</p>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Today" value={todayQueue.length} hint="Appointments scheduled" tone="teal" />
-        <StatCard label="Completed today" value={completedToday} hint="Consultations finished" tone="emerald" />
-        <StatCard label="Pending notes" value={pendingNotes} hint="Consultations missing notes" tone="amber" />
-        <StatCard label="Total seen" value={totalSeen} hint="All-time completed" tone="slate" />
+        <div className="animate-fade-in-up stagger-1">
+          <StatCard label="Today" value={todayQueue.length} hint="Appointments scheduled" tone="teal" />
+        </div>
+        <div className="animate-fade-in-up stagger-2">
+          <StatCard label="Completed today" value={completedToday} hint="Consultations finished" tone="emerald" />
+        </div>
+        <div className="animate-fade-in-up stagger-3">
+          <StatCard label="Pending notes" value={pendingNotes} hint="Consultations missing notes" tone="amber" />
+        </div>
+        <div className="animate-fade-in-up stagger-4">
+          <StatCard label="Total seen" value={totalSeen} hint="All-time completed" tone="slate" />
+        </div>
       </div>
 
       {/* Next-in-queue banner */}
       {nextInQueue ? (
-        <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-6 shadow-sm">
+        <div className="relative rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-6 shadow-sm animate-pop-in stagger-5 hover-lift overflow-hidden">
+          <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-teal-100/50 blur-2xl animate-float-slow" />
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Next in Queue</p>
@@ -115,24 +122,37 @@ export default function DoctorDashboard() {
       ) : null}
 
       {/* Today's queue */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-6 hover-lift">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-slate-900">Today&apos;s Queue</h2>
-          <Link href="/appointments/list" className="text-xs font-semibold text-teal-700 hover:text-teal-800">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-teal-500 animate-soft-pulse" />
+            Today&apos;s Queue
+          </h2>
+          <Link href="/appointments/list" className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors">
             View full list →
           </Link>
         </div>
         {isLoading ? (
-          <div className="h-24 rounded-lg bg-slate-50 animate-pulse" />
+          <div className="h-24 rounded-lg shimmer" />
         ) : todayQueue.length === 0 ? (
-          <p className="text-sm text-slate-400 py-6 text-center">No appointments today.</p>
+          <div className="py-8 text-center">
+            <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
+              <svg className="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-sm text-slate-400">No appointments today. Enjoy the break.</p>
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {todayQueue.map((appt) => (
-              <div key={appt.id} className="flex items-center justify-between py-3">
+            {todayQueue.map((appt, i) => (
+              <div
+                key={appt.id}
+                className={`flex items-center justify-between py-3 px-2 -mx-2 rounded-lg transition-colors hover:bg-slate-50 animate-slide-in-left stagger-${Math.min(i + 1, 8)}`}
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${
+                    className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 transition-transform hover:scale-110 ${
                       appt.status === "Completed" ? "bg-emerald-500" : "bg-teal-600"
                     }`}
                   >
@@ -147,7 +167,7 @@ export default function DoctorDashboard() {
                   </div>
                 </div>
                 <span
-                  className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
                     appt.status === "Completed"
                       ? "bg-emerald-50 text-emerald-700"
                       : appt.status === "Pending Payment"
@@ -166,10 +186,10 @@ export default function DoctorDashboard() {
       </div>
 
       {/* Upcoming */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-7 hover-lift">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-slate-900">Upcoming This Week</h2>
-          <Link href="/schedules" className="text-xs font-semibold text-teal-700 hover:text-teal-800">
+          <Link href="/schedules" className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors">
             Manage schedule →
           </Link>
         </div>
@@ -177,8 +197,11 @@ export default function DoctorDashboard() {
           <p className="text-sm text-slate-400 py-6 text-center">No upcoming appointments.</p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {upcoming.map((appt) => (
-              <div key={appt.id} className="flex items-center justify-between py-3">
+            {upcoming.map((appt, i) => (
+              <div
+                key={appt.id}
+                className={`flex items-center justify-between py-3 px-2 -mx-2 rounded-lg transition-colors hover:bg-slate-50 animate-slide-in-left stagger-${Math.min(i + 1, 6)}`}
+              >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900 truncate">{appt.patientName}</p>
                   <p className="text-xs text-slate-500">
@@ -186,7 +209,7 @@ export default function DoctorDashboard() {
                   </p>
                 </div>
                 <span
-                  className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
                     appt.type === "Online" ? "bg-sky-50 text-sky-700" : "bg-teal-50 text-teal-700"
                   }`}
                 >
@@ -199,7 +222,7 @@ export default function DoctorDashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-8">
         <h2 className="text-base font-bold text-slate-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <QuickAction href="/consultations" label="Consultations" color="teal" />
@@ -224,13 +247,20 @@ function StatCard({
   tone: "teal" | "emerald" | "amber" | "slate";
 }) {
   const toneMap = {
-    teal: "border-teal-200 bg-teal-50/50",
-    emerald: "border-emerald-200 bg-emerald-50/50",
-    amber: "border-amber-200 bg-amber-50/50",
-    slate: "border-slate-200",
+    teal: "border-teal-200 bg-teal-50/50 hover:border-teal-300",
+    emerald: "border-emerald-200 bg-emerald-50/50 hover:border-emerald-300",
+    amber: "border-amber-200 bg-amber-50/50 hover:border-amber-300",
+    slate: "border-slate-200 hover:border-slate-300",
+  };
+  const accentMap = {
+    teal: "bg-teal-500",
+    emerald: "bg-emerald-500",
+    amber: "bg-amber-500",
+    slate: "bg-slate-400",
   };
   return (
-    <div className={`rounded-2xl border bg-white p-5 shadow-sm ${toneMap[tone]}`}>
+    <div className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm hover-lift ${toneMap[tone]}`}>
+      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accentMap[tone]}`} />
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="text-3xl font-bold text-slate-900 mt-2">{value}</p>
       <p className="text-xs text-slate-500 mt-1">{hint}</p>
@@ -256,9 +286,10 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className={`flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] ${colorMap[color]}`}
+      className={`group flex items-center justify-center gap-1.5 rounded-xl border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md ${colorMap[color]}`}
     >
-      {label}
+      <span>{label}</span>
+      <span className="opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0">→</span>
     </Link>
   );
 }

@@ -16,6 +16,22 @@ function isValidRole(value: unknown): value is UserRole {
   );
 }
 
+function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
+  switch (dbRole) {
+    case "super_admin":
+    case "admin":
+      return "SUPER_ADMIN";
+    case "secretary":
+      return "SECRETARY";
+    case "doctor":
+      return "DOCTOR";
+    case "patient":
+      return "PATIENT";
+    default:
+      return "PATIENT";
+  }
+}
+
 export function readRoleFromUser(user: User): UserRole {
   const role = user.user_metadata?.role;
   return isValidRole(role) ? role : "PATIENT";
@@ -29,8 +45,17 @@ export async function requireAuthenticatedUser(accessToken: string) {
     throw new Error("Unauthorized");
   }
 
-  return {
-    user: data.user,
-    role: readRoleFromUser(data.user),
-  } satisfies AuthenticatedUser;
+  // Source of truth = profiles.role. Falls back to user_metadata.role
+  // if profile row is missing (e.g. trigger didn't fire).
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle<{ role: string }>();
+
+  const role: UserRole = profile?.role
+    ? dbRoleToUiRole(profile.role)
+    : readRoleFromUser(data.user);
+
+  return { user: data.user, role } satisfies AuthenticatedUser;
 }

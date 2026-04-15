@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createAppointmentAction } from "@/app/(dashboard)/appointments/actions";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorUnavailability } from "@/src/components/clinic/useClinicData";
+import { useDoctorFees } from "@/src/components/clinic/useDoctorFees";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import {
   buildBlockedDayLookup,
@@ -45,6 +46,7 @@ export default function BookAppointmentPage() {
   const { accessToken } = useRole();
   const { appointments, setAppointments, isLoading, error } = useAppointments();
   const { data: unavailability } = useDoctorUnavailability();
+  const { fees } = useDoctorFees();
   const [formData, setFormData] = useState<BookingForm>(INITIAL_FORM);
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isSubmitting, startSubmitTransition] = useTransition();
@@ -402,6 +404,11 @@ export default function BookAppointmentPage() {
                   <SummaryRow label="Queue #" value={String(selectedSlot.nextQueueNumber)} done />
                 ) : null}
                 <SummaryRow label="Patient" value={formData.patientName || "Not entered"} done={!!formData.patientName} />
+                <SummaryRow
+                  label={formData.type === "Online" ? "Fee (payable now)" : "Fee (pay after via POS)"}
+                  value={`₱${(formData.type === "Online" ? fees.online : fees.clinic).toLocaleString()}`}
+                  done
+                />
               </div>
 
               {/* Payment note */}
@@ -411,8 +418,8 @@ export default function BookAppointmentPage() {
                   : "bg-sky-50 border border-sky-200 text-sky-800"
               }`}>
                 {formData.type === "Clinic"
-                  ? "No advance payment needed. Pay after consultation via POS."
-                  : "Online consultation requires payment first. Meeting link will be generated after payment."}
+                  ? `No advance payment needed. ₱${fees.clinic.toLocaleString()} payable after consultation via POS.`
+                  : `Online consultation requires ₱${fees.online.toLocaleString()} payment first. Meeting link will be generated after payment.`}
               </div>
             </div>
 

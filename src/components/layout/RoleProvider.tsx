@@ -36,6 +36,33 @@ function isValidRole(value: unknown): value is UserRole {
   );
 }
 
+function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
+  switch (dbRole) {
+    case "super_admin":
+    case "admin":
+      return "SUPER_ADMIN";
+    case "secretary":
+      return "SECRETARY";
+    case "doctor":
+      return "DOCTOR";
+    case "patient":
+      return "PATIENT";
+    default:
+      return DEFAULT_ROLE;
+  }
+}
+
+async function fetchRoleFromProfile(userId: string): Promise<UserRole | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return dbRoleToUiRole((data as { role: string }).role);
+}
+
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -46,34 +73,37 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     let active = true;
 
-    void supabase.auth.getSession().then((result: { data: { session: Session | null }, error: any }) => {
-      const { data, error } = result;
-      if (!active) {
-        return;
-      }
+    async function applySession(nextSession: Session | null) {
+      if (!active) return;
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
 
+      if (nextSession?.user) {
+        // Optimistic role from metadata, then refine from profiles table
+        setRole(readRoleFromUser(nextSession.user));
+        const dbRole = await fetchRoleFromProfile(nextSession.user.id);
+        if (!active) return;
+        if (dbRole) setRole(dbRole);
+      } else {
+        setRole(DEFAULT_ROLE);
+      }
+      setIsLoading(false);
+    }
+
+    void supabase.auth.getSession().then((result: { data: { session: Session | null }, error: unknown }) => {
+      const { data, error } = result;
+      if (!active) return;
       if (error) {
         setIsLoading(false);
         return;
       }
-
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setRole(readRoleFromUser(data.session?.user ?? null));
-      setIsLoading(false);
+      void applySession(data.session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: string, nextSession: Session | null) => {
-      if (!active) {
-        return;
-      }
-
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      setRole(readRoleFromUser(nextSession?.user ?? null));
-      setIsLoading(false);
+      void applySession(nextSession);
     });
 
     return () => {

@@ -28,7 +28,7 @@ async function authenticateRequest(request: Request) {
 
 async function buildRoleFilter(
   user: { user: { id: string; email?: string }; role: string },
-): Promise<AppointmentFilter> {
+): Promise<AppointmentFilter | "empty"> {
   if (user.role === "PATIENT") {
     return { patientId: user.user.id };
   }
@@ -40,7 +40,8 @@ async function buildRoleFilter(
       .eq("id", user.user.id)
       .maybeSingle<{ id: string }>();
     if (data) return { doctorId: data.id };
-    return { doctorId: "__none__" };
+    // Doctor role but no doctor row — return empty result rather than a bogus UUID.
+    return "empty";
   }
   return {};
 }
@@ -52,10 +53,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const filter = await buildRoleFilter(authenticatedUser);
-  const appointments = await readAppointments(filter);
-
-  return NextResponse.json({ appointments });
+  try {
+    const filter = await buildRoleFilter(authenticatedUser);
+    if (filter === "empty") {
+      return NextResponse.json({ appointments: [] });
+    }
+    const appointments = await readAppointments(filter);
+    return NextResponse.json({ appointments });
+  } catch (e) {
+    console.error("[GET /api/appointments]", e);
+    const err = e as { message?: string; hint?: string; details?: string; code?: string };
+    const message =
+      err?.message ??
+      err?.details ??
+      err?.hint ??
+      (typeof e === "string" ? e : "Internal error");
+    return NextResponse.json(
+      { message, code: err?.code ?? null, hint: err?.hint ?? null, appointments: [] },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {

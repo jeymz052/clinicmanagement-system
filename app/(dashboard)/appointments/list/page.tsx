@@ -26,12 +26,9 @@ export default function AppointmentListPage() {
   const [draft, setDraft] = useState<AppointmentRecord | null>(null);
   const [isUpdating, startUpdateTransition] = useTransition();
   const summary = getAppointmentSummary(appointments);
-  // Only show appointments that were booked manually by the patient (assume those with a real patient email, not sample/generic emails)
-  const sortedAppointments = [...appointments]
-    .filter(a => !a.email.endsWith('@example.com'))
-    .sort((left, right) =>
-      `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
-    );
+  const sortedAppointments = [...appointments].sort((left, right) =>
+    `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
+  );
   const canManage = role !== "PATIENT";
 
   function beginEdit(appointment: AppointmentRecord) {
@@ -89,6 +86,24 @@ export default function AppointmentListPage() {
       return;
     }
     startUpdateTransition(async () => {
+      // Try Stripe Checkout first (if configured). Fall back to manual mark-paid.
+      try {
+        const checkoutRes = await fetch("/api/v2/payments/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ appointment_id: appointmentId }),
+        });
+        if (checkoutRes.ok) {
+          const { url } = (await checkoutRes.json()) as { url?: string };
+          if (url) {
+            window.location.href = url;
+            return;
+          }
+        }
+      } catch {
+        // fall through to manual
+      }
+
       const result = await markAppointmentPaidAction(accessToken, appointmentId);
       setAppointments(result.appointments);
       setFeedback(result.message);

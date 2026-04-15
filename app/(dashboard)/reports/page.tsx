@@ -68,7 +68,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex items-start justify-between gap-4 flex-wrap animate-fade-in-down">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Reports & Analytics</h1>
           <p className="mt-1 text-sm text-slate-500">Live metrics from the booking and payment system</p>
@@ -96,13 +96,21 @@ export default function ReportsPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Revenue" value={loading ? "…" : formatMoney(data?.revenue.total ?? 0)} hint="Clinic + Online" />
-        <StatCard label="Clinic Revenue" value={loading ? "…" : formatMoney(data?.revenue.clinic ?? 0)} hint="POS collections" />
-        <StatCard label="Online Revenue" value={loading ? "…" : formatMoney(data?.revenue.online ?? 0)} hint="Advance payments" />
-        <StatCard label="Appointments" value={loading ? "…" : String(data?.volume.appointments ?? 0)} hint={`${data?.volume.unique_patients ?? 0} unique patients`} />
+        <div className="animate-fade-in-up stagger-1">
+          <StatCard label="Total Revenue" value={loading ? "…" : formatMoney(data?.revenue.total ?? 0)} hint="Clinic + Online" tone="teal" />
+        </div>
+        <div className="animate-fade-in-up stagger-2">
+          <StatCard label="Clinic Revenue" value={loading ? "…" : formatMoney(data?.revenue.clinic ?? 0)} hint="POS collections" tone="emerald" />
+        </div>
+        <div className="animate-fade-in-up stagger-3">
+          <StatCard label="Online Revenue" value={loading ? "…" : formatMoney(data?.revenue.online ?? 0)} hint="Advance payments" tone="sky" />
+        </div>
+        <div className="animate-fade-in-up stagger-4">
+          <StatCard label="Appointments" value={loading ? "…" : String(data?.volume.appointments ?? 0)} hint={`${data?.volume.unique_patients ?? 0} unique patients`} tone="amber" />
+        </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-8">
+      <div className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-5">
         <h2 className="text-lg font-bold text-slate-900">Peak Hours</h2>
         <p className="text-xs text-slate-500 mt-0.5">Booking count per hour (excluding cancelled)</p>
         {loading ? (
@@ -131,7 +139,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-8">
+      <div className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-6">
         <h2 className="text-lg font-bold text-slate-900">No-show Rate by Doctor</h2>
         <p className="text-xs text-slate-500 mt-0.5">Share of completed-or-missed appointments that were missed</p>
         {loading ? (
@@ -168,10 +176,27 @@ export default function ReportsPage() {
   );
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function StatCard({
+  label,
+  value,
+  hint,
+  tone = "teal",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "teal" | "emerald" | "sky" | "amber";
+}) {
+  const accent = {
+    teal: "bg-teal-500",
+    emerald: "bg-emerald-500",
+    sky: "bg-sky-500",
+    amber: "bg-amber-500",
+  };
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 hover-lift">
+      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
     </div>

@@ -9,9 +9,9 @@ type PermissionAction =
 
 const PERMISSION_MAP: Record<PermissionAction, UserRole[]> = {
   "appointments.read": ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
-  "appointments.create": ["SUPER_ADMIN", "SECRETARY", "PATIENT"],
+  "appointments.create": ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   "appointments.manage": ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
-  "payments.online": ["SUPER_ADMIN", "SECRETARY", "PATIENT"],
+  "payments.online": ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   "payments.pos": ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
 };
 

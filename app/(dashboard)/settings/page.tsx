@@ -71,7 +71,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-fade-in-down">
         <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">System and clinic-wide configuration</p>
       </div>
@@ -94,7 +94,7 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-8">
+      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-1">
         <h2 className="text-lg font-bold text-slate-900">General</h2>
         <fieldset disabled={loading || !canEdit || isSaving} className="mt-6 space-y-6">
           <div>

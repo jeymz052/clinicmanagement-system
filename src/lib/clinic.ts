@@ -43,31 +43,8 @@ export type SystemSettings = {
   maxPatientsPerHour: number;
 };
 
-export const INITIAL_UNAVAILABILITY: DoctorUnavailability[] = [
-  {
-    id: "blk-001",
-    doctorId: "chiara-punzalan",
-    date: "2026-04-15",
-    reason: "Leave",
-    note: "Annual leave",
-  },
-];
-
-export const INITIAL_PATIENTS: PatientRecordItem[] = [];
-
-export const INITIAL_CONSULTATION_NOTES: ConsultationNote[] = [
-  {
-    id: "note-001",
-    appointmentId: "apt-001",
-    doctorId: "chiara-punzalan",
-    patientName: "John Doe",
-    note: "Blood pressure stable. Continue current medication.",
-    prescription: "Losartan 50mg daily",
-    status: "Completed",
-    updatedAt: "2026-04-11T09:00:00.000Z",
-  },
-];
-
+// All clinic data now lives in Supabase. Only INITIAL_SYSTEM_SETTINGS remains
+// as an in-memory default returned if the system_settings row is missing.
 export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
   clinicName: "Chiara Clinic",
   email: "admin@chiara.test",

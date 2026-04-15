@@ -7,6 +7,7 @@ export type NotifyTemplate =
   | "appointment_paid_and_confirmed"
   | "appointment_payment_failed"
   | "appointment_reminder_24h"
+  | "appointment_reminder_6h"
   | "appointment_cancelled"
   | "billing_issued";
 

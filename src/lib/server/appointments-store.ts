@@ -98,7 +98,8 @@ export async function readAppointments(
   let q = supabase
     .from("appointments")
     .select("*")
-    .not("status", "in", "(Cancelled,NoShow)");
+    .neq("status", "Cancelled")
+    .neq("status", "NoShow");
   if (patientId) q = q.eq("patient_id", patientId);
   if (filter.doctorId) q = q.eq("doctor_id", filter.doctorId);
 
