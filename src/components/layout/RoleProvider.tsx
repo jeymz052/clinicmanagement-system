@@ -23,7 +23,7 @@ type RoleContextValue = {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 function readRoleFromUser(user: User | null): UserRole {
-  const metadataRole = user?.user_metadata?.role;
+  const metadataRole = user?.app_metadata?.role;
   return isValidRole(metadataRole) ? metadataRole : DEFAULT_ROLE;
 }
 
@@ -52,15 +52,14 @@ function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
   }
 }
 
-async function fetchRoleFromProfile(userId: string): Promise<UserRole | null> {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return dbRoleToUiRole((data as { role: string }).role);
+async function fetchRoleFromApi(accessToken: string): Promise<UserRole | null> {
+  const res = await fetch("/api/v2/me", {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const payload = (await res.json()) as { profile?: { role?: string } };
+  return payload.profile?.role ? dbRoleToUiRole(payload.profile.role) : null;
 }
 
 export function RoleProvider({ children }: { children: ReactNode }) {
@@ -81,7 +80,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       if (nextSession?.user) {
         // Optimistic role from metadata, then refine from profiles table
         setRole(readRoleFromUser(nextSession.user));
-        const dbRole = await fetchRoleFromProfile(nextSession.user.id);
+        const dbRole = await fetchRoleFromApi(nextSession.access_token);
         if (!active) return;
         if (dbRole) setRole(dbRole);
       } else {

@@ -38,7 +38,7 @@ export const ROLE_PROFILES: RoleProfile[] = [
   },
 ];
 
-export const DEFAULT_ROLE: UserRole = "SECRETARY";
+export const DEFAULT_ROLE: UserRole = "PATIENT";
 
 export function getRoleProfile(role: UserRole) {
   return ROLE_PROFILES.find((profile) => profile.role === role) ?? ROLE_PROFILES[1];
@@ -53,6 +53,10 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   {
     prefixes: ["/dashboard"],
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
+    prefixes: ["/users"],
+    allowedRoles: ["SUPER_ADMIN"],
   },
   {
     prefixes: ["/appointments"],

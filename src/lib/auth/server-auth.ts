@@ -33,7 +33,7 @@ function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
 }
 
 export function readRoleFromUser(user: User): UserRole {
-  const role = user.user_metadata?.role;
+  const role = user.app_metadata?.role;
   return isValidRole(role) ? role : "PATIENT";
 }
 

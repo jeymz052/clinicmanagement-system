@@ -37,7 +37,8 @@ export async function POST(req: Request) {
       email: body.email,
       phone: body.phone,
       email_confirm: true,
-      user_metadata: { full_name: body.full_name, role: "patient" },
+      user_metadata: { full_name: body.full_name },
+      app_metadata: { role: "patient" },
     });
     if (authError || !authUser.user) throw new HttpError(400, authError?.message ?? "Unable to create user");
 

@@ -37,6 +37,7 @@ type NavItem = {
 const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   SUPER_ADMIN: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
+    { label: "Users", href: "/users", icon: FaUsers },
     {
       label: "Patients",
       href: "/patients",

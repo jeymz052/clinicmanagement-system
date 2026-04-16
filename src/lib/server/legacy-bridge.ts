@@ -77,7 +77,8 @@ export async function findOrCreatePatientByEmail(
     email,
     password: randomUUID(),
     email_confirm: true,
-    user_metadata: { full_name, role: "patient" },
+    user_metadata: { full_name },
+    app_metadata: { role: "patient" },
   });
   if (error || !created.user) throw error ?? new Error("Failed to create patient account");
 

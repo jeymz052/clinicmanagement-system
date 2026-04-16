@@ -156,7 +156,8 @@ export async function createPatient(
       email: payload.email,
       password: randomUUID(),
       email_confirm: true,
-      user_metadata: { full_name: payload.fullName, role: "patient" },
+      user_metadata: { full_name: payload.fullName },
+      app_metadata: { role: "patient" },
     });
     if (error || !created.user) throw error ?? new Error("Failed to create patient");
     userId = created.user.id;
