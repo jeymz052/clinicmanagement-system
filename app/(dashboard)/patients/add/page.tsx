@@ -76,23 +76,13 @@ export default function AddPatientPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-slate-700">City</label>
-              <input
-                type="text"
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                placeholder="New York"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Emergency Contact</label>
-              <input
-                type="tel"
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                placeholder="+1 (555) 000-0001"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">City</label>
+            <input
+              type="text"
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="New York"
+            />
           </div>
 
           <div className="flex gap-3 pt-4">

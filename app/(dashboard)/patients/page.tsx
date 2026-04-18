@@ -1,24 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FaCheck, FaRegPenToSquare, FaTrashCan, FaXmark } from "react-icons/fa6";
+import { FaRegPenToSquare, FaTrashCan } from "react-icons/fa6";
 import { usePatients } from "@/src/components/clinic/useClinicData";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { PatientRecordItem } from "@/src/lib/clinic";
 import { GENDER_OPTIONS, validatePatientRegistrationFields } from "@/src/lib/patient-registration";
 
 type PatientDraft = PatientRecordItem;
-
-type NewPatientForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  dateOfBirth: string;
-  gender: string;
-  address: string;
-  emergencyContact: string;
-  isWalkIn: boolean;
-};
+type NewPatientForm = Omit<PatientRecordItem, "id" | "status">;
 
 const EMPTY_NEW_PATIENT: NewPatientForm = {
   fullName: "",
@@ -27,26 +17,26 @@ const EMPTY_NEW_PATIENT: NewPatientForm = {
   dateOfBirth: "",
   gender: "",
   address: "",
-  emergencyContact: "",
   isWalkIn: false,
 };
 
 export default function PatientsPage() {
   const { accessToken, role } = useRole();
   const { data: patients, setData: setPatients, isLoading, error } = usePatients();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<PatientDraft | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isMutating, startTransition] = useTransition();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [newPatient, setNewPatient] = useState<NewPatientForm>(EMPTY_NEW_PATIENT);
+  const [draft, setDraft] = useState<PatientDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PatientRecordItem | null>(null);
   const maxBirthDate = new Date().toISOString().slice(0, 10);
 
   const canManage = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
 
   function beginEdit(patient: PatientRecordItem) {
-    setEditingId(patient.id);
     setDraft(patient);
+    setShowEditModal(true);
     setFeedback(null);
   }
 
@@ -84,13 +74,13 @@ export default function PatientsPage() {
 
       const payload = (await response.json()) as { data: PatientRecordItem[] };
       setPatients(payload.data);
-      setEditingId(null);
       setDraft(null);
+      setShowEditModal(false);
       setFeedback("Patient updated.");
     });
   }
 
-  function deletePatient(id: string) {
+  function confirmDelete(id: string) {
     if (!accessToken) {
       setFeedback("Your session expired. Please sign in again.");
       return;
@@ -109,6 +99,7 @@ export default function PatientsPage() {
 
       const payload = (await response.json()) as { data: PatientRecordItem[] };
       setPatients(payload.data);
+      setDeleteTarget(null);
       setFeedback("Patient deleted.");
     });
   }
@@ -152,16 +143,16 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4 animate-fade-in-down">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Patients</h1>
-          <p className="mt-1 text-base text-slate-600">Manage patient records, walk-ins, and contact information.</p>
+          <p className="mt-1 text-base text-slate-600">Manage patient records and status.</p>
         </div>
         {canManage ? (
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="rounded-xl bg-teal-700 px-5 py-2.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-teal-800 hover:scale-[1.04] focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="rounded-xl bg-teal-700 px-5 py-2.5 text-base font-semibold text-white shadow-md transition hover:bg-teal-800"
           >
             + Add Patient
           </button>
@@ -179,339 +170,137 @@ export default function PatientsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="animate-fade-in-up stagger-1"><Summary label="Total Patients" value={patients.length.toString()} tone="teal" /></div>
-        <div className="animate-fade-in-up stagger-2"><Summary label="Walk-Ins" value={patients.filter((patient) => patient.isWalkIn).length.toString()} tone="amber" /></div>
-        <div className="animate-fade-in-up stagger-3"><Summary label="Active" value={patients.filter((patient) => patient.status === "Active").length.toString()} tone="emerald" /></div>
-      </div>
-
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md hover-lift animate-fade-in-up stagger-4">
-        <table className="w-full text-left text-base">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md">
+        <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
-              <th className="px-6 py-4 font-semibold text-slate-700">Patient</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Contact</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Details</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Actions</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Full Name</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Email</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Phone</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Date of Birth</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Gender</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Address</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Status</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Type</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Actions</th>
             </tr>
           </thead>
           <tbody>
             {patients.length === 0 && !isLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                   No patients yet. Click &quot;+ Add Patient&quot; to get started.
                 </td>
               </tr>
             ) : null}
-            {patients.map((patient) => {
-              const isEditing = editingId === patient.id && draft !== null;
-              return (
-                <tr
-                  key={patient.id}
-                  className="border-t border-slate-200 align-top transition-all duration-150 hover:bg-teal-50/40"
-                >
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <input
-                          value={draft.fullName}
-                          onChange={(event) => updateDraft("fullName", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                        <input
-                          value={draft.dateOfBirth}
-                          onChange={(event) => updateDraft("dateOfBirth", event.target.value)}
-                          type="date"
-                          max={maxBirthDate}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-slate-900">{patient.fullName}</p>
-                        <p className="mt-1 text-xs text-slate-500">{patient.isWalkIn ? "Walk-in" : "Registered"}</p>
-                      </>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <input
-                          value={draft.email}
-                          onChange={(event) => updateDraft("email", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                        <input
-                          value={draft.phone}
-                          onChange={(event) => updateDraft("phone", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600">
-                        <p>{patient.email}</p>
-                        <p className="mt-1 text-xs text-slate-500">{patient.phone}</p>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <select
-                          value={draft.gender}
-                          onChange={(event) => updateDraft("gender", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        >
-                          <option value="">Select Gender</option>
-                          {GENDER_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={draft.emergencyContact}
-                          onChange={(event) => updateDraft("emergencyContact", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                        <input
-                          value={draft.address}
-                          onChange={(event) => updateDraft("address", event.target.value)}
-                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600">
-                        <p>{patient.gender}</p>
-                        <p className="mt-1 text-xs text-slate-500">{patient.emergencyContact}</p>
-                        <p className="mt-1 text-xs text-slate-500">{patient.address}</p>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <select
-                        value={draft.status}
-                        onChange={(event) =>
-                          updateDraft("status", event.target.value as PatientRecordItem["status"])
-                        }
-                        className="rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 outline-none ring-teal-400 transition focus:ring shadow-sm"
+            {patients.map((patient) => (
+              <tr key={patient.id} className="border-t border-slate-200 align-top hover:bg-teal-50/30">
+                <td className="px-4 py-3 text-slate-900">{patient.fullName}</td>
+                <td className="px-4 py-3 text-slate-600">{patient.email}</td>
+                <td className="px-4 py-3 text-slate-600">{patient.phone || "-"}</td>
+                <td className="px-4 py-3 text-slate-600">{patient.dateOfBirth || "-"}</td>
+                <td className="px-4 py-3 text-slate-600">{patient.gender || "-"}</td>
+                <td className="px-4 py-3 text-slate-600">{patient.address || "-"}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      patient.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {patient.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">{patient.isWalkIn ? "Walk-in" : "Registered"}</td>
+                <td className="px-4 py-3">
+                  {canManage ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(patient)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800"
+                        aria-label={`Edit ${patient.fullName}`}
                       >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    ) : (
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          patient.status === "Active"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
+                        <FaRegPenToSquare className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(patient)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-700 hover:border-red-400 hover:bg-red-100"
+                        aria-label={`Delete ${patient.fullName}`}
                       >
-                        {patient.status}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      {canManage && !isEditing ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => beginEdit(patient)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-all duration-150 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                            aria-label={`Edit ${patient.fullName}`}
-                            title="Edit patient"
-                          >
-                            <FaRegPenToSquare className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deletePatient(patient.id)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300"
-                            aria-label={`Delete ${patient.fullName}`}
-                            title="Delete patient"
-                          >
-                            <FaTrashCan className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : null}
-                      {isEditing ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={savePatient}
-                            disabled={isMutating}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-teal-700 text-white shadow-md transition-all duration-150 hover:scale-105 hover:bg-teal-800 disabled:bg-teal-300"
-                            aria-label={`Save ${patient.fullName}`}
-                            title="Save changes"
-                          >
-                            <FaCheck className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingId(null);
-                              setDraft(null);
-                            }}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-all duration-150 hover:border-teal-300 hover:bg-slate-100 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                            aria-label={`Cancel editing ${patient.fullName}`}
-                            title="Cancel editing"
-                          >
-                            <FaXmark className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : null}
+                        <FaTrashCan className="h-4 w-4" />
+                      </button>
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
+                  ) : null}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       {isLoading ? <p className="text-sm text-slate-500">Loading patient records...</p> : null}
 
-      {/* Add Patient Modal */}
       {showAddModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-slate-900">Add New Patient</h2>
+        <PatientFormModal
+          title="Add New Patient"
+          confirmLabel={isMutating ? "Saving..." : "Save Patient"}
+          patient={newPatient}
+          maxBirthDate={maxBirthDate}
+          onClose={() => {
+            setShowAddModal(false);
+            setNewPatient(EMPTY_NEW_PATIENT);
+          }}
+          onChange={(field, value) => setNewPatient((current) => ({ ...current, [field]: value }))}
+          onSubmit={submitNewPatient}
+          isMutating={isMutating}
+        />
+      ) : null}
+
+      {showEditModal && draft ? (
+        <PatientFormModal
+          title="Edit Patient"
+          confirmLabel={isMutating ? "Saving..." : "Save Changes"}
+          patient={draft}
+          maxBirthDate={maxBirthDate}
+          onClose={() => {
+            setShowEditModal(false);
+            setDraft(null);
+          }}
+          onChange={(field, value) => updateDraft(field, value as never)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            savePatient();
+          }}
+          isMutating={isMutating}
+          showStatus
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Delete patient record?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This will set <span className="font-semibold">{deleteTarget.fullName}</span> as inactive.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => { setShowAddModal(false); setNewPatient(EMPTY_NEW_PATIENT); }}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDelete(deleteTarget.id)}
+                disabled={isMutating}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+              >
+                {isMutating ? "Deleting..." : "Delete"}
               </button>
             </div>
-
-            <form onSubmit={submitNewPatient} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={newPatient.fullName}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, fullName: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="Juan Dela Cruz"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={newPatient.email}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, email: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="juan@email.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={newPatient.phone}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, phone: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="+63 912 345 6789"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={newPatient.dateOfBirth}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                    max={maxBirthDate}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                  <select
-                    value={newPatient.gender}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, gender: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    required
-                  >
-                    <option value="">Select Gender</option>
-                    {GENDER_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact</label>
-                  <input
-                    type="tel"
-                    value={newPatient.emergencyContact}
-                    onChange={(e) => setNewPatient((p) => ({ ...p, emergencyContact: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="+63 912 345 6780"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={newPatient.address}
-                  onChange={(e) => setNewPatient((p) => ({ ...p, address: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="123 Main Street, City"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isWalkIn"
-                  checked={newPatient.isWalkIn}
-                  onChange={(e) => setNewPatient((p) => ({ ...p, isWalkIn: e.target.checked }))}
-                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-400"
-                />
-                <label htmlFor="isWalkIn" className="text-sm text-slate-700">Walk-in Patient</label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowAddModal(false); setNewPatient(EMPTY_NEW_PATIENT); }}
-                  className="rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating}
-                  className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300"
-                >
-                  {isMutating ? "Saving..." : "Save Patient"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       ) : null}
@@ -519,25 +308,168 @@ export default function PatientsPage() {
   );
 }
 
-function Summary({
-  label,
-  value,
-  tone = "teal",
-}: {
-  label: string;
-  value: string;
-  tone?: "teal" | "amber" | "emerald";
-}) {
-  const accent = {
-    teal: "bg-teal-500",
-    amber: "bg-amber-500",
-    emerald: "bg-emerald-500",
-  };
+type PatientFormModalProps = {
+  title: string;
+  confirmLabel: string;
+  patient: NewPatientForm | PatientDraft;
+  maxBirthDate: string;
+  onClose: () => void;
+  onChange: (field: keyof PatientDraft, value: string | boolean) => void;
+  onSubmit: (event: React.FormEvent) => void;
+  isMutating: boolean;
+  showStatus?: boolean;
+};
+
+function PatientFormModal({
+  title,
+  confirmLabel,
+  patient,
+  maxBirthDate,
+  onClose,
+  onChange,
+  onSubmit,
+  isMutating,
+  showStatus = false,
+}: PatientFormModalProps) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-md hover-lift">
-      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-extrabold text-slate-900">{value}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Full Name">
+              <input
+                type="text"
+                value={patient.fullName}
+                onChange={(e) => onChange("fullName", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                required
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                type="email"
+                value={patient.email}
+                onChange={(e) => onChange("email", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                required
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Phone">
+              <input
+                type="tel"
+                value={patient.phone}
+                onChange={(e) => onChange("phone", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                required
+              />
+            </Field>
+            <Field label="Date of Birth">
+              <input
+                type="date"
+                max={maxBirthDate}
+                value={patient.dateOfBirth}
+                onChange={(e) => onChange("dateOfBirth", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                required
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Gender">
+              <select
+                value={patient.gender}
+                onChange={(e) => onChange("gender", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                required
+              >
+                <option value="">Select Gender</option>
+                {GENDER_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {showStatus ? (
+              <Field label="Status">
+                <select
+                  value={(patient as PatientDraft).status}
+                  onChange={(e) => onChange("status", e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </Field>
+            ) : (
+              <div />
+            )}
+          </div>
+
+          <Field label="Address">
+            <input
+              type="text"
+              value={patient.address}
+              onChange={(e) => onChange("address", e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
+              required
+            />
+          </Field>
+
+          {!showStatus ? (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={patient.isWalkIn}
+                onChange={(e) => onChange("isWalkIn", e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-400"
+              />
+              Walk-in Patient
+            </label>
+          ) : null}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isMutating}
+              className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300"
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      {children}
+    </label>
   );
 }

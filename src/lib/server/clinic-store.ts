@@ -134,7 +134,6 @@ type PatientJoinRow = {
   dob: string | null;
   gender: string | null;
   address: string | null;
-  emergency_contact: string | null;
   profiles: {
     full_name: string;
     email: string;
@@ -153,7 +152,6 @@ function mapPatientRow(row: PatientJoinRow): PatientRecordItem {
     dateOfBirth: row.dob ?? "",
     gender: row.gender ?? "",
     address: row.address ?? "",
-    emergencyContact: row.emergency_contact ?? "",
     isWalkIn: false,
     status: row.profiles?.is_active === false ? "Inactive" : "Active",
   };
@@ -163,7 +161,7 @@ export async function readPatients(): Promise<PatientRecordItem[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("patients")
-    .select("id, dob, gender, address, emergency_contact, profiles!inner(full_name, email, phone, is_active, role)")
+    .select("id, dob, gender, address, profiles!inner(full_name, email, phone, is_active, role)")
     .eq("profiles.role", "patient")
     .order("id");
   if (error) throw error;
@@ -219,7 +217,6 @@ export async function createPatient(
       dob: normalized.dateOfBirth || null,
       gender: normalized.gender || null,
       address: normalized.address || null,
-      emergency_contact: normalized.emergencyContact || null,
     });
 
   return readPatients();
@@ -246,7 +243,6 @@ export async function updatePatient(
       dob: normalized.dateOfBirth || null,
       gender: normalized.gender || null,
       address: normalized.address || null,
-      emergency_contact: normalized.emergencyContact || null,
     })
     .eq("id", updatedPatient.id);
   return readPatients();

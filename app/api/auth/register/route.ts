@@ -28,7 +28,6 @@ function assertRegisterPayload(payload: unknown): RegisterPayload {
     dateOfBirth: body.dateOfBirth ?? "",
     gender: body.gender ?? "",
     address: body.address ?? "",
-    emergencyContact: body.emergencyContact ?? "",
   });
 
   const validationError = validatePatientRegistrationFields(fields);
@@ -80,7 +79,6 @@ export async function POST(req: Request) {
         dob: body.dateOfBirth,
         gender: body.gender,
         address: body.address,
-        emergency_contact: body.emergencyContact,
       });
     if (upsertPatientError) throw upsertPatientError;
 

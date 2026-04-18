@@ -16,7 +16,6 @@ export type PatientRecordItem = {
   dateOfBirth: string;
   gender: string;
   address: string;
-  emergencyContact: string;
   isWalkIn: boolean;
   status: "Active" | "Inactive";
 };

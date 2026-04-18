@@ -22,7 +22,6 @@ const INITIAL_FORM: AuthForm = {
   dateOfBirth: "",
   gender: "",
   address: "",
-  emergencyContact: "",
 };
 
 const MAX_SIGNIN_ATTEMPTS = 5;
@@ -38,6 +37,8 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetFeedback, setResetFeedback] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AuthForm, string>>>({});
   const [signInAttempts, setSignInAttempts] = useState(0);
   const [lockUntil, setLockUntil] = useState<number | null>(null);
 
@@ -81,7 +82,44 @@ export default function LoginPage() {
 
   function updateField<K extends keyof AuthForm>(field: K, value: AuthForm[K]) {
     setFormData((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setFeedback(null);
+  }
+
+  function validateSignupFields(values: AuthForm) {
+    const errors: Partial<Record<keyof AuthForm, string>> = {};
+    const normalizedName = values.fullName.trim();
+    const normalizedEmail = values.email.trim().toLowerCase();
+    const normalizedPhone = values.phone.replace(/[\s()-]/g, "");
+    const normalizedPassword = values.password;
+    const normalizedAddress = values.address.trim();
+
+    if (!/^[A-Za-z][A-Za-z\s'.-]{1,79}$/.test(normalizedName)) {
+      errors.fullName = "Name should contain letters, spaces, apostrophes, dots, and hyphens only.";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      errors.email = "Enter a valid email address.";
+    }
+    if (!/^(?:\+639\d{9}|09\d{9}|9\d{9})$/.test(normalizedPhone) && !/^\+\d{8,15}$/.test(normalizedPhone)) {
+      errors.phone = "Use PH number (+639XXXXXXXXX or 09XXXXXXXXX) or international +countrycode.";
+    }
+    if (
+      normalizedPassword.length < 8 ||
+      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(normalizedPassword)
+    ) {
+      errors.password = "Use 8+ chars with uppercase, lowercase, number, and special character.";
+    }
+    if (!values.dateOfBirth) {
+      errors.dateOfBirth = "Date of birth is required.";
+    }
+    if (!values.gender) {
+      errors.gender = "Please select a gender.";
+    }
+    if (normalizedAddress.length < 8) {
+      errors.address = "Address should be at least 8 characters.";
+    }
+
+    return errors;
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -91,6 +129,16 @@ export default function LoginPage() {
     const now = Date.now();
 
     if (mode === "signup") {
+      const signupFieldErrors = validateSignupFields({
+        ...formData,
+        email: normalizedEmail,
+      });
+      if (Object.keys(signupFieldErrors).length > 0) {
+        setFieldErrors(signupFieldErrors);
+        setFeedback("Please fix the highlighted fields.");
+        return;
+      }
+
       const signupError = validatePatientSignupFields({
         ...formData,
         email: normalizedEmail,
@@ -99,6 +147,7 @@ export default function LoginPage() {
         setFeedback(signupError);
         return;
       }
+      setFieldErrors({});
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setFeedback("Please enter a valid email address.");
       return;
@@ -158,7 +207,6 @@ export default function LoginPage() {
             dob: formData.dateOfBirth,
             gender: formData.gender,
             address: formData.address,
-            emergency_contact: formData.emergencyContact,
           },
         },
       });
@@ -186,7 +234,6 @@ export default function LoginPage() {
           dateOfBirth: formData.dateOfBirth,
           gender: formData.gender,
           address: formData.address,
-          emergencyContact: formData.emergencyContact,
         }),
       });
 
@@ -222,46 +269,51 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-black/15" />
 
       {/* Login card - glassmorphism matching reference */}
-      <section className="relative z-10 w-full max-w-md rounded-2xl border-2 border-teal-700/50 bg-transparent backdrop-blur-[2px] shadow-xl p-5 overflow-hidden">
+      <section className="relative z-10 w-full max-w-[390px] rounded-2xl border border-emerald-400/60 bg-black/16 backdrop-blur-[2px] shadow-xl p-3.5 overflow-hidden">
 
         {/* Content */}
         <div className="relative z-10">
         {/* Logo — negative margin trims transparent padding baked into the PNG */}
-        <div className="flex justify-center -mb-4 overflow-hidden">
+        <div className="flex justify-center -mb-5 overflow-hidden">
           <Image
             src="/images/chiaralogo.png"
             alt="Chiara Logo"
-            width={280}
-            height={100}
+            width={230}
+            height={82}
             priority
             quality={100}
             style={{ height: "auto" }}
-            className="object-contain drop-shadow-lg -mt-6 -mb-6"
+            className="object-contain drop-shadow-lg -mt-3 -mb-4"
           />
         </div>
 
         {/* Heading */}
-        <div className="text-center mb-3" style={{ fontFamily: 'Inter, Segoe UI, Arial, sans-serif' }}>
-          <p className="text-xl font-extrabold text-white drop-shadow">
+        <div className="text-center mb-2" style={{ fontFamily: "Inter, Segoe UI, Arial, sans-serif" }}>
+          <p className="text-lg font-extrabold text-white drop-shadow">
             {mode === "signin" ? "Welcome Back!" : "Create Account"}
           </p>
-          <p className="text-xs text-white/95 mt-0.5">
+          <p className="text-[10px] text-white/95 mt-0.5">
             {mode === "signin" ? "Sign in to continue your journey" : "Fill in your details to get started"}
           </p>
         </div>
 
-        <form className="space-y-3" onSubmit={handleSubmit}>
+        <form className="space-y-2" onSubmit={handleSubmit}>
           {mode === "signup" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Field label="Full Name">
                 <input
                   type="text"
                   value={formData.fullName}
                   onChange={(event) => updateField("fullName", event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  className="mt-0.5 w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/65 outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
                   placeholder="Juan Dela Cruz"
+                  minLength={2}
+                  maxLength={80}
+                  pattern="[A-Za-z][A-Za-z\s'.-]{1,79}"
+                  title="Use letters, spaces, apostrophes, dots, and hyphens only."
                   required
                 />
+                {mode === "signup" && fieldErrors.fullName ? <FieldError message={fieldErrors.fullName} /> : null}
               </Field>
 
               <Field label="Phone">
@@ -269,10 +321,13 @@ export default function LoginPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(event) => updateField("phone", event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  className="mt-0.5 w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/65 outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
                   placeholder="+63 912 345 6789"
+                  inputMode="tel"
+                  title="Use PH format (+639XXXXXXXXX or 09XXXXXXXXX) or international +countrycode."
                   required
                 />
+                {mode === "signup" && fieldErrors.phone ? <FieldError message={fieldErrors.phone} /> : null}
               </Field>
             </div>
           ) : null}
@@ -282,20 +337,24 @@ export default function LoginPage() {
               type="email"
               value={formData.email}
               onChange={(event) => updateField("email", event.target.value)}
-              className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+              className="mt-0.5 w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/65 outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
               placeholder="name@clinicmail.com"
+              autoComplete="email"
               required
             />
+            {mode === "signup" && fieldErrors.email ? <FieldError message={fieldErrors.email} /> : null}
           </Field>
 
           <Field label="Password">
-            <div className="relative mt-1">
+            <div className="relative mt-0.5">
               <input
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={(event) => updateField("password", event.target.value)}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 pr-11 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                className="w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 pr-11 text-sm text-white placeholder:text-white/65 outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
                 placeholder="••••••••"
+                minLength={8}
+                title="Use at least 8 characters with uppercase, lowercase, number, and special character."
                 required
               />
               <button
@@ -315,36 +374,52 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+            {mode === "signup" && fieldErrors.password ? <FieldError message={fieldErrors.password} /> : null}
           </Field>
 
           {mode === "signup" ? (
             <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Field label="Date of Birth">
                   <input
                     type="date"
                     value={formData.dateOfBirth}
                     onChange={(event) => updateField("dateOfBirth", event.target.value)}
                     max={maxBirthDate}
-                    className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                    className="mt-0.5 w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 text-sm text-white outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
                     required
                   />
+                  {fieldErrors.dateOfBirth ? <FieldError message={fieldErrors.dateOfBirth} /> : null}
                 </Field>
 
                 <Field label="Gender">
-                  <select
-                    value={formData.gender}
-                    onChange={(event) => updateField("gender", event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-white/30 bg-slate-900/60 px-3 py-2.5 text-white outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
-                    required
-                  >
-                    <option value="">Select Gender</option>
-                    {GENDER_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                  <div className="relative mt-0.5">
+                    <select
+                      value={formData.gender}
+                      onChange={(event) => updateField("gender", event.target.value)}
+                      className="w-full appearance-none rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 pr-8 text-sm text-white outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
+                      required
+                    >
+                      <option value="" className="bg-slate-900 text-white">
+                        Select Gender
                       </option>
-                    ))}
-                  </select>
+                      {GENDER_OPTIONS.map((option) => (
+                        <option key={option} value={option} className="bg-slate-900 text-white">
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/90"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  {fieldErrors.gender ? <FieldError message={fieldErrors.gender} /> : null}
                 </Field>
               </div>
 
@@ -353,30 +428,30 @@ export default function LoginPage() {
                   type="text"
                   value={formData.address}
                   onChange={(event) => updateField("address", event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  className="mt-0.5 w-full rounded-lg border border-emerald-400/65 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/65 outline-none transition focus:ring-2 focus:ring-emerald-300/90 focus:border-emerald-300"
                   placeholder="123 Main Street, City"
                   required
                 />
+                {fieldErrors.address ? <FieldError message={fieldErrors.address} /> : null}
               </Field>
 
-              <Field label="Emergency Contact">
-                <input
-                  type="tel"
-                  value={formData.emergencyContact}
-                  onChange={(event) => updateField("emergencyContact", event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
-                  placeholder="+63 912 345 6780"
-                  required
-                />
-              </Field>
             </>
           ) : null}
 
           {mode === "signin" ? (
-            <div className="-mt-1 flex items-center justify-end">
+            <div className="mt-1 flex items-center justify-between">
+              <label className="inline-flex items-center gap-1.5 text-[10px] text-white/90">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  className="h-3 w-3 rounded border border-white/50 bg-white/10 accent-emerald-500"
+                />
+                Remember Me
+              </label>
               <button
                 type="button"
-                className="text-xs font-semibold text-white/90 hover:underline"
+                className="text-[10px] font-semibold text-white/90 hover:underline"
                 onClick={() => {
                   setShowReset(true);
                   setResetEmail(formData.email);
@@ -397,12 +472,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/40 transition hover:bg-teal-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-teal-800 disabled:text-teal-300"
+            className={`${mode === "signup" ? "mt-1" : "-mt-0.5"} w-full flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-700 via-emerald-600 to-green-500 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white shadow-lg shadow-emerald-900/40 transition hover:from-emerald-600 hover:via-emerald-500 hover:to-green-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:from-emerald-900 disabled:to-emerald-700 disabled:text-emerald-200`}
           >
             {mode === "signin" ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h13m0 0l-4-4m4 4l-4 4" />
-                <rect x="16" y="6" width="5" height="12" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6L16.5 12L10.5 18" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12H16.5" />
               </svg>
             ) : (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -421,30 +496,46 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-3 text-center">
+        <div className="mt-2 text-center">
           {mode === "signin" ? (
-            <p className="text-sm text-white/95">
+            <p className="text-[11px] text-white/90">
               Don&apos;t have an account?{' '}
               <button
                 type="button"
-                className="text-white font-semibold hover:underline"
-                onClick={() => { setMode('signup'); setFeedback(null); }}
+                className="text-emerald-300 font-semibold hover:text-emerald-200 hover:underline"
+                onClick={() => { setMode("signup"); setFeedback(null); setFieldErrors({}); }}
               >
                 Sign Up
               </button>
             </p>
           ) : (
-            <p className="text-sm text-white/95">
+            <p className="text-xs text-white/95">
               Already have an account?{' '}
               <button
                 type="button"
-                className="text-white font-semibold hover:underline"
-                onClick={() => { setMode('signin'); setFeedback(null); }}
+                className="text-emerald-300 font-semibold hover:text-emerald-200 hover:underline"
+                onClick={() => { setMode("signin"); setFeedback(null); setFieldErrors({}); }}
               >
                 Sign In
               </button>
             </p>
           )}
+          {mode === "signin" ? (
+            <div className="mt-2.5 space-y-1 text-center">
+              <p className="text-[9px] text-white/70">
+                © 2026 Chiara Clinic | All rights reserved | Powered by Chiara Clinic
+              </p>
+              <p className="text-[9px] text-white/70">Having trouble?</p>
+              <div className="flex items-center justify-center gap-4 text-[10px]">
+                <button type="button" className="text-white/85 hover:text-white hover:underline">
+                  Contact Support
+                </button>
+                <button type="button" className="text-white/85 hover:text-white hover:underline">
+                  Help Center
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
         </div>
       </section>
@@ -510,9 +601,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block text-sm font-semibold text-white/95 mb-1 tracking-wide">
+    <label className="block text-[11px] font-semibold text-white/95 mb-0.5 tracking-wide">
       {label}
       {children}
     </label>
   );
+}
+
+function FieldError({ message }: { message: string }) {
+  return <p className="mt-1 text-[10px] text-rose-300">{message}</p>;
 }
