@@ -12,6 +12,10 @@ import {
   type PatientRecordItem,
   type SystemSettings,
 } from "@/src/lib/clinic";
+import {
+  patientRecordToRegistrationFields,
+  validatePatientRegistrationFields,
+} from "@/src/lib/patient-registration";
 
 function daysBetween(startIso: string, endIso: string): string[] {
   const start = new Date(startIso);
@@ -98,6 +102,31 @@ export async function deleteDoctorUnavailability(
   return readDoctorUnavailability();
 }
 
+export async function updateDoctorUnavailability(
+  id: string,
+  payload: Omit<DoctorUnavailability, "id">,
+): Promise<DoctorUnavailability[]> {
+  const supabase = getSupabaseAdmin();
+  const [blockId] = id.split("|");
+  const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
+  const starts_at = `${payload.date}T00:00:00Z`;
+  const endDate = new Date(`${payload.date}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  const ends_at = endDate.toISOString();
+
+  const { error } = await supabase
+    .from("doctor_unavailability")
+    .update({
+      doctor_id: doctorUuid,
+      starts_at,
+      ends_at,
+      reason: payload.note || payload.reason,
+    })
+    .eq("id", blockId);
+  if (error) throw error;
+  return readDoctorUnavailability();
+}
+
 // ============ PATIENTS (v2 via profiles+patients) ============
 
 type PatientJoinRow = {
@@ -111,6 +140,7 @@ type PatientJoinRow = {
     email: string;
     phone: string | null;
     is_active: boolean;
+    role: string;
   } | null;
 };
 
@@ -133,7 +163,8 @@ export async function readPatients(): Promise<PatientRecordItem[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("patients")
-    .select("id, dob, gender, address, emergency_contact, profiles!inner(full_name, email, phone, is_active)")
+    .select("id, dob, gender, address, emergency_contact, profiles!inner(full_name, email, phone, is_active, role)")
+    .eq("profiles.role", "patient")
     .order("id");
   if (error) throw error;
   return (data ?? []).map((row) => mapPatientRow(row as unknown as PatientJoinRow));
@@ -143,20 +174,27 @@ export async function createPatient(
   payload: Omit<PatientRecordItem, "id" | "status">,
 ): Promise<PatientRecordItem[]> {
   const supabase = getSupabaseAdmin();
+  const normalized = patientRecordToRegistrationFields(payload);
+  const validationError = validatePatientRegistrationFields(normalized);
+  if (validationError) throw new Error(validationError);
 
   const { data: existing } = await supabase
     .from("profiles")
-    .select("id")
-    .eq("email", payload.email.toLowerCase())
-    .maybeSingle<{ id: string }>();
+    .select("id, role")
+    .eq("email", normalized.email)
+    .maybeSingle<{ id: string; role: string }>();
+
+  if (existing && existing.role !== "patient") {
+    throw new Error("This email is already registered to a non-patient account.");
+  }
 
   let userId = existing?.id ?? null;
   if (!userId) {
     const { data: created, error } = await supabase.auth.admin.createUser({
-      email: payload.email,
+      email: normalized.email,
       password: randomUUID(),
       email_confirm: true,
-      user_metadata: { full_name: payload.fullName },
+      user_metadata: { full_name: normalized.fullName },
       app_metadata: { role: "patient" },
     });
     if (error || !created.user) throw error ?? new Error("Failed to create patient");
@@ -167,8 +205,9 @@ export async function createPatient(
   await supabase
     .from("profiles")
     .update({
-      full_name: payload.fullName,
-      phone: payload.phone,
+      full_name: normalized.fullName,
+      phone: normalized.phone,
+      role: "patient",
       is_active: true,
     })
     .eq("id", userId);
@@ -177,10 +216,10 @@ export async function createPatient(
     .from("patients")
     .upsert({
       id: userId,
-      dob: payload.dateOfBirth || null,
-      gender: payload.gender || null,
-      address: payload.address || null,
-      emergency_contact: payload.emergencyContact || null,
+      dob: normalized.dateOfBirth || null,
+      gender: normalized.gender || null,
+      address: normalized.address || null,
+      emergency_contact: normalized.emergencyContact || null,
     });
 
   return readPatients();
@@ -190,19 +229,24 @@ export async function updatePatient(
   updatedPatient: PatientRecordItem,
 ): Promise<PatientRecordItem[]> {
   const supabase = getSupabaseAdmin();
+  const normalized = patientRecordToRegistrationFields(updatedPatient);
+  const validationError = validatePatientRegistrationFields(normalized);
+  if (validationError) throw new Error(validationError);
+
   const profileUpdate = {
-    full_name: updatedPatient.fullName,
-    phone: updatedPatient.phone,
+    full_name: normalized.fullName,
+    email: normalized.email,
+    phone: normalized.phone,
     is_active: updatedPatient.status !== "Inactive",
   };
   await supabase.from("profiles").update(profileUpdate).eq("id", updatedPatient.id);
   await supabase
     .from("patients")
     .update({
-      dob: updatedPatient.dateOfBirth || null,
-      gender: updatedPatient.gender || null,
-      address: updatedPatient.address || null,
-      emergency_contact: updatedPatient.emergencyContact || null,
+      dob: normalized.dateOfBirth || null,
+      gender: normalized.gender || null,
+      address: normalized.address || null,
+      emergency_contact: normalized.emergencyContact || null,
     })
     .eq("id", updatedPatient.id);
   return readPatients();
@@ -229,7 +273,9 @@ type NoteJoinRow = {
   appointments: {
     status: string;
     patient_id: string;
-    profiles: { full_name: string } | null;
+    patients: {
+      profiles: { full_name: string } | null;
+    } | null;
   } | null;
 };
 
@@ -244,7 +290,7 @@ async function mapNoteRow(row: NoteJoinRow, slugsById: Map<string, string>): Pro
     id: row.id,
     appointmentId: row.appointment_id,
     doctorId: slugsById.get(row.doctor_id) ?? row.doctor_id,
-    patientName: row.appointments?.profiles?.full_name ?? "Unknown",
+    patientName: row.appointments?.patients?.profiles?.full_name ?? "Unknown",
     note: row.notes ?? "",
     prescription: row.prescription ?? "",
     status: deriveLegacyNoteStatus(row.appointments?.status ?? ""),
@@ -258,7 +304,11 @@ export async function readConsultationNotes(): Promise<ConsultationNote[]> {
     .from("consultation_notes")
     .select(`
       id, appointment_id, doctor_id, chief_complaint, diagnosis, prescription, notes, updated_at,
-      appointments!inner(status, patient_id, profiles:patient_id(full_name))
+      appointments!inner(
+        status,
+        patient_id,
+        patients!inner(profiles!inner(full_name))
+      )
     `)
     .order("updated_at", { ascending: false });
   if (error) throw error;

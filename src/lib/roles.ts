@@ -64,7 +64,7 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   },
   {
     prefixes: ["/payments/invoices", "/payments/pos"],
-    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
   },
   {
     prefixes: ["/payments"],

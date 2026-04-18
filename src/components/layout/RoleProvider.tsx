@@ -23,8 +23,7 @@ type RoleContextValue = {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 function readRoleFromUser(user: User | null): UserRole {
-  const metadataRole = user?.app_metadata?.role;
-  return isValidRole(metadataRole) ? metadataRole : DEFAULT_ROLE;
+  return roleToUiRole(user?.app_metadata?.role) ?? DEFAULT_ROLE;
 }
 
 function isValidRole(value: unknown): value is UserRole {
@@ -37,7 +36,7 @@ function isValidRole(value: unknown): value is UserRole {
 }
 
 function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
-  switch (dbRole) {
+  switch (dbRole?.toLowerCase()) {
     case "super_admin":
     case "admin":
       return "SUPER_ADMIN";
@@ -52,14 +51,35 @@ function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
   }
 }
 
+function roleToUiRole(rawRole: unknown): UserRole | null {
+  if (isValidRole(rawRole)) return rawRole;
+  if (typeof rawRole !== "string") return null;
+  return dbRoleToUiRole(rawRole);
+}
+
 async function fetchRoleFromApi(accessToken: string): Promise<UserRole | null> {
-  const res = await fetch("/api/v2/me", {
-    cache: "no-store",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) return null;
-  const payload = (await res.json()) as { profile?: { role?: string } };
-  return payload.profile?.role ? dbRoleToUiRole(payload.profile.role) : null;
+  const attempts = 3;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch("/api/v2/me", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) continue;
+      const payload = (await res.json()) as { profile?: { role?: string } };
+      const parsedRole = roleToUiRole(payload.profile?.role);
+      if (parsedRole) return parsedRole;
+    } catch {
+      // Network timeouts can happen in local dev; retry briefly before fallback.
+    }
+
+    if (attempt < attempts) {
+      await new Promise((resolve) => setTimeout(resolve, 350 * attempt));
+    }
+  }
+
+  return null;
 }
 
 export function RoleProvider({ children }: { children: ReactNode }) {

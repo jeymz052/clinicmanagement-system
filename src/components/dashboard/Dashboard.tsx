@@ -4,6 +4,7 @@ import { useRole } from "@/src/components/layout/RoleProvider";
 import AdminDashboard from "@/src/components/dashboard/AdminDashboard";
 import DoctorDashboard from "@/src/components/dashboard/DoctorDashboard";
 import PatientDashboard from "@/src/components/dashboard/PatientDashboard";
+import SecretaryDashboard from "@/src/components/dashboard/SecretaryDashboard";
 
 export default function Dashboard() {
   const { role, isLoading } = useRole();
@@ -23,5 +24,6 @@ export default function Dashboard() {
 
   if (role === "PATIENT") return <PatientDashboard />;
   if (role === "DOCTOR") return <DoctorDashboard />;
+  if (role === "SECRETARY") return <SecretaryDashboard />;
   return <AdminDashboard />;
 }

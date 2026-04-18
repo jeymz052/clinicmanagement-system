@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
-import { HttpError, type Actor, isStaff } from "@/src/lib/http";
+import { HttpError, type Actor } from "@/src/lib/http";
 import type { Appointment, Payment, PaymentMethod } from "@/src/lib/db/types";
 import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
@@ -136,7 +136,6 @@ export function verifyWebhookSignature(req: Request, rawBody: string): void {
   const signature = req.headers.get("x-webhook-signature");
   if (!signature) throw new HttpError(401, "Missing signature");
 
-  const crypto = require("node:crypto") as typeof import("node:crypto");
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
   if (signature !== expected) throw new HttpError(401, "Invalid signature");
 }

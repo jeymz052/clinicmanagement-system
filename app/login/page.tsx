@@ -3,23 +3,28 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import {
+  GENDER_OPTIONS,
+  type PatientSignupFields,
+  validatePatientSignupFields,
+} from "@/src/lib/patient-registration";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
 
-type AuthForm = {
-  fullName: string;
-  email: string;
-  password: string;
-};
+type AuthForm = PatientSignupFields;
 
 const INITIAL_FORM: AuthForm = {
   fullName: "",
   email: "",
   password: "",
+  phone: "",
+  dateOfBirth: "",
+  gender: "",
+  address: "",
+  emergencyContact: "",
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_SIGNIN_ATTEMPTS = 5;
 const LOCK_MINUTES = 5;
 
@@ -52,7 +57,7 @@ export default function LoginPage() {
       try {
         const supabase = getSupabaseBrowserClient();
         const email = resetEmail.trim().toLowerCase();
-        if (!email || !EMAIL_RE.test(email)) {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           setResetFeedback("Enter a valid email address.");
           return;
         }
@@ -85,17 +90,19 @@ export default function LoginPage() {
     const normalizedEmail = formData.email.trim().toLowerCase();
     const now = Date.now();
 
-    if (!EMAIL_RE.test(normalizedEmail)) {
+    if (mode === "signup") {
+      const signupError = validatePatientSignupFields({
+        ...formData,
+        email: normalizedEmail,
+      });
+      if (signupError) {
+        setFeedback(signupError);
+        return;
+      }
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setFeedback("Please enter a valid email address.");
       return;
-    }
-
-    if (mode === "signup" && formData.fullName.trim().length < 2) {
-      setFeedback("Full name must be at least 2 characters.");
-      return;
-    }
-
-    if (formData.password.length < 8) {
+    } else if (formData.password.length < 8) {
       setFeedback("Password must be at least 8 characters.");
       return;
     }
@@ -140,13 +147,18 @@ export default function LoginPage() {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
         password: formData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/confirm`,
           data: {
             full_name: formData.fullName,
+            phone: formData.phone,
+            dob: formData.dateOfBirth,
+            gender: formData.gender,
+            address: formData.address,
+            emergency_contact: formData.emergencyContact,
           },
         },
       });
@@ -156,19 +168,46 @@ export default function LoginPage() {
         return;
       }
 
+      if (!data.user?.id) {
+        setFeedback("Account created, but we could not finish setting up the patient profile.");
+        return;
+      }
+
+      const profileResponse = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: data.user.id,
+          fullName: formData.fullName,
+          email: normalizedEmail,
+          phone: formData.phone,
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender,
+          address: formData.address,
+          emergencyContact: formData.emergencyContact,
+        }),
+      });
+
+      if (!profileResponse.ok) {
+        const body = (await profileResponse.json().catch(() => null)) as { message?: string } | null;
+        setFeedback(body?.message ?? "Account created, but we could not save the patient details.");
+        return;
+      }
+
       setFeedback(
         "Account created. Check your email and confirm your account before signing in.",
       );
       setMode("signin");
-      setFormData((current) => ({
-        ...current,
-        password: "",
-      }));
+      setFormData(INITIAL_FORM);
     });
   }
 
+  const maxBirthDate = new Date().toISOString().slice(0, 10);
+
   return (
-    <main className="relative min-h-screen flex items-center justify-end bg-slate-950 overflow-hidden pr-8 md:pr-20 lg:pr-32">
+    <main className="relative min-h-screen flex items-center justify-end bg-slate-950 overflow-hidden px-4 md:px-10 lg:px-20">
       {/* Full-screen background image */}
       <Image
         src="/images/chiarabg.png"
@@ -183,7 +222,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-black/15" />
 
       {/* Login card - glassmorphism matching reference */}
-      <section className="relative z-10 w-full max-w-xs rounded-2xl border-2 border-teal-700/50 bg-transparent backdrop-blur-[2px] shadow-xl p-5 overflow-hidden">
+      <section className="relative z-10 w-full max-w-md rounded-2xl border-2 border-teal-700/50 bg-transparent backdrop-blur-[2px] shadow-xl p-5 overflow-hidden">
 
         {/* Content */}
         <div className="relative z-10">
@@ -196,6 +235,7 @@ export default function LoginPage() {
             height={100}
             priority
             quality={100}
+            style={{ height: "auto" }}
             className="object-contain drop-shadow-lg -mt-6 -mb-6"
           />
         </div>
@@ -212,16 +252,29 @@ export default function LoginPage() {
 
         <form className="space-y-3" onSubmit={handleSubmit}>
           {mode === "signup" ? (
-            <Field label="Full Name">
-              <input
-                type="text"
-                value={formData.fullName}
-                onChange={(event) => updateField("fullName", event.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
-                placeholder="Juan Dela Cruz"
-                required
-              />
-            </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Full Name">
+                <input
+                  type="text"
+                  value={formData.fullName}
+                  onChange={(event) => updateField("fullName", event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  placeholder="Juan Dela Cruz"
+                  required
+                />
+              </Field>
+
+              <Field label="Phone">
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(event) => updateField("phone", event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  placeholder="+63 912 345 6789"
+                  required
+                />
+              </Field>
+            </div>
           ) : null}
 
           <Field label="Email">
@@ -263,6 +316,61 @@ export default function LoginPage() {
               </button>
             </div>
           </Field>
+
+          {mode === "signup" ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Date of Birth">
+                  <input
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(event) => updateField("dateOfBirth", event.target.value)}
+                    max={maxBirthDate}
+                    className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                    required
+                  />
+                </Field>
+
+                <Field label="Gender">
+                  <select
+                    value={formData.gender}
+                    onChange={(event) => updateField("gender", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/30 bg-slate-900/60 px-3 py-2.5 text-white outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                    required
+                  >
+                    <option value="">Select Gender</option>
+                    {GENDER_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Address">
+                <input
+                  type="text"
+                  value={formData.address}
+                  onChange={(event) => updateField("address", event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  placeholder="123 Main Street, City"
+                  required
+                />
+              </Field>
+
+              <Field label="Emergency Contact">
+                <input
+                  type="tel"
+                  value={formData.emergencyContact}
+                  onChange={(event) => updateField("emergencyContact", event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/60 outline-none transition focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  placeholder="+63 912 345 6780"
+                  required
+                />
+              </Field>
+            </>
+          ) : null}
 
           {mode === "signin" ? (
             <div className="-mt-1 flex items-center justify-end">

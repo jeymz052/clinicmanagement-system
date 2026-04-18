@@ -144,6 +144,7 @@ export default function ResetPasswordPage() {
               height={100}
               priority
               quality={100}
+              style={{ height: "auto" }}
               className="object-contain drop-shadow-lg -mt-6 -mb-6"
             />
           </div>

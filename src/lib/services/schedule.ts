@@ -164,6 +164,34 @@ export async function deleteSchedule(id: string) {
   if (error) throw error;
 }
 
+export async function updateSchedule(
+  id: string,
+  input: {
+    start_time?: string;
+    end_time?: string;
+    slot_minutes?: number;
+    is_active?: boolean;
+  },
+) {
+  if (
+    input.start_time &&
+    input.end_time &&
+    input.start_time >= input.end_time
+  ) {
+    throw new HttpError(400, "start_time must be before end_time");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("doctor_schedules")
+    .update(input)
+    .eq("id", id)
+    .select()
+    .single<DoctorSchedule>();
+  if (error) throw error;
+  return data;
+}
+
 export async function addUnavailability(input: {
   doctor_id: string;
   starts_at: string;

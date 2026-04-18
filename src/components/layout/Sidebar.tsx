@@ -16,7 +16,6 @@ import {
   FaHouse,
   FaRegMessage,
   FaRegUser,
-  FaShieldHalved,
   FaStethoscope,
   FaUsers,
 } from "react-icons/fa6";
@@ -88,7 +87,6 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
     { label: "Reports", href: "/reports", icon: FaChartLine },
     { label: "Settings", href: "/settings", icon: FaGear },
-    { label: "System Roles", href: "/settings", icon: FaShieldHalved },
     { label: "Help Center", href: "/help", icon: FaCircleQuestion },
   ],
   SECRETARY: [
@@ -195,6 +193,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       icon: FaCalendarCheck,
       subItems: [
         { label: "Book Appointment", href: "/appointments" },
+        { label: "My Appointments", href: "/appointments/my" },
         { label: "Calendar View", href: "/appointments/calendar" },
       ],
     },
@@ -213,7 +212,6 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       icon: FaCreditCard,
       subItems: [
         { label: "Pay Online", href: "/payments" },
-        { label: "Invoices", href: "/payments/invoices" },
       ],
     },
     {
@@ -275,6 +273,7 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
               height={64}
               priority
               quality={100}
+              style={{ height: "auto" }}
               className="object-contain -my-2"
             />
             <button

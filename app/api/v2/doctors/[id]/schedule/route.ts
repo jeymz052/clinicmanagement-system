@@ -1,5 +1,9 @@
 import { HttpError, httpError, ok, requireActor, isStaff } from "@/src/lib/http";
-import { deleteSchedule, upsertSchedule } from "@/src/lib/services/schedule";
+import {
+  deleteSchedule,
+  updateSchedule,
+  upsertSchedule,
+} from "@/src/lib/services/schedule";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -48,6 +52,29 @@ export async function DELETE(req: Request, { params }: Ctx) {
     if (!scheduleId) throw new HttpError(400, "schedule_id required");
     await deleteSchedule(scheduleId);
     return ok({ ok: true });
+  } catch (e) {
+    return httpError(e);
+  }
+}
+
+export async function PATCH(req: Request, { params }: Ctx) {
+  try {
+    const actor = await requireActor(req);
+    const { id } = await params;
+    const allowed =
+      isStaff(actor.profile.role) ||
+      (actor.profile.role === "doctor" && actor.id === id);
+    if (!allowed) throw new HttpError(403, "Forbidden");
+
+    const body = await req.json();
+    if (!body.schedule_id) throw new HttpError(400, "schedule_id required");
+    const schedule = await updateSchedule(body.schedule_id, {
+      start_time: body.start_time,
+      end_time: body.end_time,
+      slot_minutes: body.slot_minutes,
+      is_active: body.is_active,
+    });
+    return ok({ schedule });
   } catch (e) {
     return httpError(e);
   }

@@ -32,7 +32,15 @@ export default function OnlineConsultationPage() {
   const [isSaving, startTransition] = useTransition();
 
   const eligibleAppointments = appointments
-    .filter((appointment) => appointment.type === "Clinic" || appointment.status === "Paid")
+    .filter((appointment) => {
+      if (appointment.type === "Clinic") {
+        return (
+          appointment.status === "Confirmed" ||
+          appointment.status === "Completed"
+        );
+      }
+      return appointment.status === "Paid";
+    })
     .sort((left, right) => `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`));
   const onlineReady = appointments.filter(
     (appointment) => appointment.type === "Online" && appointment.status === "Paid",

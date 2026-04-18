@@ -332,8 +332,11 @@ function DonutSection({
 }
 
 export default function AdminDashboard() {
-  const { role } = useRole();
+  const { role, user } = useRole();
   const greeting = ROLE_GREETINGS[role];
+  const displayName = user?.user_metadata?.full_name ?? "Staff";
+  const greetingTitle =
+    role === "SUPER_ADMIN" ? "Welcome, Super Admin" : `Welcome, ${displayName}`;
   const { appointments } = useAppointments();
   const { data: patients } = usePatients();
 
@@ -364,7 +367,7 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-in-down">
-        <h1 className="text-2xl font-bold text-slate-900">{greeting.greeting}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{greetingTitle}</h1>
         <p className="text-sm text-slate-500 mt-0.5">{greeting.subtitle}</p>
       </div>
 

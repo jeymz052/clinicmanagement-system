@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { FaCheck, FaRegPenToSquare, FaTrashCan, FaXmark } from "react-icons/fa6";
 import { usePatients } from "@/src/components/clinic/useClinicData";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { PatientRecordItem } from "@/src/lib/clinic";
+import { GENDER_OPTIONS, validatePatientRegistrationFields } from "@/src/lib/patient-registration";
 
 type PatientDraft = PatientRecordItem;
 
@@ -38,6 +40,7 @@ export default function PatientsPage() {
   const [isMutating, startTransition] = useTransition();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatient, setNewPatient] = useState<NewPatientForm>(EMPTY_NEW_PATIENT);
+  const maxBirthDate = new Date().toISOString().slice(0, 10);
 
   const canManage = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
 
@@ -57,6 +60,12 @@ export default function PatientsPage() {
       return;
     }
 
+    const validationError = validatePatientRegistrationFields(draft);
+    if (validationError) {
+      setFeedback(validationError);
+      return;
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/patients", {
         method: "PATCH",
@@ -68,7 +77,8 @@ export default function PatientsPage() {
       });
 
       if (!response.ok) {
-        setFeedback("Unable to update patient.");
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        setFeedback(body?.message ?? "Unable to update patient.");
         return;
       }
 
@@ -110,6 +120,12 @@ export default function PatientsPage() {
       return;
     }
 
+    const validationError = validatePatientRegistrationFields(newPatient);
+    if (validationError) {
+      setFeedback(validationError);
+      return;
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/patients", {
         method: "POST",
@@ -121,7 +137,8 @@ export default function PatientsPage() {
       });
 
       if (!response.ok) {
-        setFeedback("Unable to add patient.");
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        setFeedback(body?.message ?? "Unable to add patient.");
         return;
       }
 
@@ -206,6 +223,7 @@ export default function PatientsPage() {
                           value={draft.dateOfBirth}
                           onChange={(event) => updateDraft("dateOfBirth", event.target.value)}
                           type="date"
+                          max={maxBirthDate}
                           className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
                         />
                       </div>
@@ -240,21 +258,34 @@ export default function PatientsPage() {
                   <td className="px-6 py-4">
                     {isEditing ? (
                       <div className="space-y-2">
-                        <input
+                        <select
                           value={draft.gender}
                           onChange={(event) => updateDraft("gender", event.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                        />
+                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 outline-none ring-teal-400 transition focus:ring shadow-sm"
+                        >
+                          <option value="">Select Gender</option>
+                          {GENDER_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                         <input
                           value={draft.emergencyContact}
                           onChange={(event) => updateDraft("emergencyContact", event.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
+                        />
+                        <input
+                          value={draft.address}
+                          onChange={(event) => updateDraft("address", event.target.value)}
+                          className="w-full rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-slate-900 placeholder:text-slate-500 outline-none ring-teal-400 transition focus:ring shadow-sm"
                         />
                       </div>
                     ) : (
                       <div className="text-slate-600">
                         <p>{patient.gender}</p>
                         <p className="mt-1 text-xs text-slate-500">{patient.emergencyContact}</p>
+                        <p className="mt-1 text-xs text-slate-500">{patient.address}</p>
                       </div>
                     )}
                   </td>
@@ -289,16 +320,20 @@ export default function PatientsPage() {
                           <button
                             type="button"
                             onClick={() => beginEdit(patient)}
-                            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-all duration-150 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-all duration-150 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            aria-label={`Edit ${patient.fullName}`}
+                            title="Edit patient"
                           >
-                            Edit
+                            <FaRegPenToSquare className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             onClick={() => deletePatient(patient.id)}
-                            className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-700 transition-all duration-150 hover:bg-red-100 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-300"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300"
+                            aria-label={`Delete ${patient.fullName}`}
+                            title="Delete patient"
                           >
-                            Delete
+                            <FaTrashCan className="h-4 w-4" />
                           </button>
                         </>
                       ) : null}
@@ -308,9 +343,11 @@ export default function PatientsPage() {
                             type="button"
                             onClick={savePatient}
                             disabled={isMutating}
-                            className="rounded-lg bg-teal-700 px-3 py-1 text-xs font-semibold text-white shadow-md transition-all duration-150 hover:bg-teal-800 hover:scale-105 disabled:bg-teal-300"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-teal-700 text-white shadow-md transition-all duration-150 hover:scale-105 hover:bg-teal-800 disabled:bg-teal-300"
+                            aria-label={`Save ${patient.fullName}`}
+                            title="Save changes"
                           >
-                            Save
+                            <FaCheck className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
@@ -318,9 +355,11 @@ export default function PatientsPage() {
                               setEditingId(null);
                               setDraft(null);
                             }}
-                            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-all duration-150 hover:bg-slate-100 hover:border-teal-300 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-all duration-150 hover:border-teal-300 hover:bg-slate-100 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            aria-label={`Cancel editing ${patient.fullName}`}
+                            title="Cancel editing"
                           >
-                            Cancel
+                            <FaXmark className="h-4 w-4" />
                           </button>
                         </>
                       ) : null}
@@ -396,6 +435,7 @@ export default function PatientsPage() {
                     type="date"
                     value={newPatient.dateOfBirth}
                     onChange={(e) => setNewPatient((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    max={maxBirthDate}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-400"
                     required
                   />
@@ -412,9 +452,11 @@ export default function PatientsPage() {
                     required
                   >
                     <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    {GENDER_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

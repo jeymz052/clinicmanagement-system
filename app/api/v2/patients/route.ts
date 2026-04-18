@@ -12,7 +12,8 @@ export async function GET(req: Request) {
     const search = url.searchParams.get("q");
     let q = supabase
       .from("patients")
-      .select("*, profiles!inner(id, full_name, email, phone, is_active)");
+      .select("*, profiles!inner(id, full_name, email, phone, is_active, role)")
+      .eq("profiles.role", "patient");
     if (search) q = q.ilike("profiles.full_name", `%${search}%`);
     const { data, error } = await q.limit(100);
     if (error) throw error;

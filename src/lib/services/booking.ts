@@ -3,6 +3,8 @@ import { HttpError, type Actor, isStaff } from "@/src/lib/http";
 import type { Appointment, ApptType, Doctor } from "@/src/lib/db/types";
 import {
   getDoctorScheduleForDate,
+  getAvailability,
+  suggestNextSlot,
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
 import { enqueueNotification } from "@/src/lib/services/notification";
@@ -44,6 +46,23 @@ function overlapsBlocks(
   });
 }
 
+function normalizeTime(time: string) {
+  return time.length === 5 ? `${time}:00` : time;
+}
+
+function overlapsSlot(
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string,
+) {
+  const aStart = normalizeTime(startA);
+  const aEnd = normalizeTime(endA);
+  const bStart = normalizeTime(startB);
+  const bEnd = normalizeTime(endB);
+  return aStart < bEnd && aEnd > bStart;
+}
+
 export async function reserveAppointment(input: BookingInput, actor: Actor) {
   if (actor.profile.role === "patient" && actor.id !== input.patient_id) {
     throw new HttpError(403, "Patients may only book for themselves");
@@ -67,18 +86,43 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
 
   const { data: existing, error: existingError } = await supabase
     .from("appointments")
-    .select("queue_number, status")
+    .select("queue_number, status, start_time, end_time, appointment_type")
     .eq("doctor_id", input.doctor_id)
-    .eq("appointment_date", input.appointment_date)
-    .eq("start_time", input.start_time);
+    .eq("appointment_date", input.appointment_date);
   if (existingError) throw existingError;
 
   const active = (existing ?? []).filter(
     (r) => r.status !== "Cancelled" && r.status !== "NoShow",
   );
-  if (active.length >= 5) throw new HttpError(409, "Slot is full (max 5/hour)");
 
-  const used = new Set(active.map((r) => r.queue_number));
+  const overlapping = active.filter((r) =>
+    overlapsSlot(input.start_time, input.end_time, r.start_time, r.end_time),
+  );
+  const conflictingType = overlapping.find(
+    (r) => r.appointment_type !== input.appointment_type,
+  );
+  if (conflictingType) {
+    const availability = await getAvailability(input.doctor_id, input.appointment_date);
+    const next = suggestNextSlot(availability);
+    const hint = next
+      ? ` Next available: ${next.start.slice(0, 5)}-${next.end.slice(0, 5)}.`
+      : "";
+    throw new HttpError(
+      409,
+      `Slot conflict: ${conflictingType.appointment_type} booking already exists for this shared time slot.${hint}`,
+    );
+  }
+
+  if (overlapping.length >= 5) {
+    const availability = await getAvailability(input.doctor_id, input.appointment_date);
+    const next = suggestNextSlot(availability);
+    const hint = next
+      ? ` Next available: ${next.start.slice(0, 5)}-${next.end.slice(0, 5)}.`
+      : "";
+    throw new HttpError(409, `Slot is full (max 5/hour).${hint}`);
+  }
+
+  const used = new Set(overlapping.map((r) => r.queue_number));
   let queue_number = 1;
   while (queue_number <= 5 && used.has(queue_number)) queue_number++;
   if (queue_number > 5) throw new HttpError(409, "Slot is full");

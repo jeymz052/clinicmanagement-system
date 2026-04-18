@@ -14,6 +14,17 @@ async function authenticate(request: Request) {
   return token ? requireAuthenticatedUser(token) : null;
 }
 
+function formatError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Internal error";
+  const status =
+    message === "Unauthorized"
+      ? 401
+      : message.includes("already registered") || message.includes("valid") || message.includes("required")
+        ? 400
+        : 500;
+  return NextResponse.json({ message }, { status });
+}
+
 export async function GET(request: Request) {
   const auth = await authenticate(request);
   if (!auth || !hasPermission(auth.role, "appointments.read")) {
@@ -23,19 +34,27 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  try {
+    const auth = await authenticate(request);
+    if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json({ data: await createPatient(await request.json()) });
+  } catch (error) {
+    return formatError(error);
   }
-  return NextResponse.json({ data: await createPatient(await request.json()) });
 }
 
 export async function PATCH(request: Request) {
-  const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  try {
+    const auth = await authenticate(request);
+    if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json({ data: await updatePatient(await request.json()) });
+  } catch (error) {
+    return formatError(error);
   }
-  return NextResponse.json({ data: await updatePatient(await request.json()) });
 }
 
 export async function DELETE(request: Request) {

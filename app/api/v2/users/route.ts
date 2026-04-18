@@ -9,8 +9,8 @@ type CreateUserBody = {
   phone?: string | null;
   role: "super_admin" | "secretary" | "doctor";
   doctor?: {
-    specialty: string;
-    license_no: string;
+    specialty?: string;
+    license_no?: string;
     consultation_fee_clinic?: number;
     consultation_fee_online?: number;
   };
@@ -21,11 +21,6 @@ function assertCreateBody(body: unknown): CreateUserBody {
   const b = body as Partial<CreateUserBody>;
   if (!b.email || !b.full_name || !b.role) {
     throw new HttpError(400, "email, full_name, role required");
-  }
-  if (b.role === "doctor") {
-    if (!b.doctor?.specialty || !b.doctor?.license_no) {
-      throw new HttpError(400, "doctor.specialty and doctor.license_no required");
-    }
   }
   if (b.role !== "super_admin" && b.role !== "secretary" && b.role !== "doctor") {
     throw new HttpError(400, "role must be super_admin, secretary, or doctor");
@@ -99,13 +94,14 @@ export async function POST(req: Request) {
     if (profileError) throw profileError;
 
     if (body.role === "doctor") {
-      const doctorPayload = body.doctor!;
+      const doctorPayload = body.doctor;
       const { error: doctorError } = await supabase.from("doctors").insert({
         id: created.user.id,
-        specialty: doctorPayload.specialty,
-        license_no: doctorPayload.license_no,
-        consultation_fee_clinic: doctorPayload.consultation_fee_clinic ?? 0,
-        consultation_fee_online: doctorPayload.consultation_fee_online ?? 0,
+        specialty: doctorPayload?.specialty?.trim() || "General Doctor",
+        // doctors.license_no is unique + non-null in schema, so fallback must be unique.
+        license_no: doctorPayload?.license_no?.trim() || `AUTO-${created.user.id}`,
+        consultation_fee_clinic: doctorPayload?.consultation_fee_clinic ?? 0,
+        consultation_fee_online: doctorPayload?.consultation_fee_online ?? 0,
       });
       if (doctorError) throw doctorError;
     }

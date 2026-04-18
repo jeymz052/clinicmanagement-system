@@ -5,6 +5,7 @@ import {
   addDoctorUnavailability,
   deleteDoctorUnavailability,
   readDoctorUnavailability,
+  updateDoctorUnavailability,
 } from "@/src/lib/server/clinic-store";
 
 async function authenticate(request: Request) {
@@ -42,4 +43,25 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: "Missing id" }, { status: 400 });
   }
   return NextResponse.json({ data: await deleteDoctorUnavailability(id) });
+}
+
+export async function PATCH(request: Request) {
+  const auth = await authenticate(request);
+  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  const payload = (await request.json().catch(() => null)) as
+    | ({ id: string } & Parameters<typeof updateDoctorUnavailability>[1])
+    | null;
+  if (!payload?.id) {
+    return NextResponse.json({ message: "Missing id" }, { status: 400 });
+  }
+  return NextResponse.json({
+    data: await updateDoctorUnavailability(payload.id, {
+      doctorId: payload.doctorId,
+      date: payload.date,
+      reason: payload.reason,
+      note: payload.note,
+    }),
+  });
 }

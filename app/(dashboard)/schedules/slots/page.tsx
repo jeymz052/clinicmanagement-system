@@ -34,6 +34,7 @@ export default function TimeSlotsPage() {
   const { data: blockedDates, setData: setBlockedDates, isLoading, error } = useDoctorUnavailability();
   const [form, setForm] = useState<BlockForm>(INITIAL_FORM);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<AppointmentType>("Clinic");
   const [isSaving, startTransition] = useTransition();
 
@@ -60,12 +61,12 @@ export default function TimeSlotsPage() {
 
     startTransition(async () => {
       const response = await fetch("/api/unavailability", {
-        method: "POST",
+        method: editingBlockId ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(editingBlockId ? { id: editingBlockId, ...form } : form),
       });
 
       if (!response.ok) {
@@ -75,9 +76,25 @@ export default function TimeSlotsPage() {
 
       const payload = (await response.json()) as { data: typeof blockedDates };
       setBlockedDates(payload.data);
-      setFeedback(`Saved ${form.reason.toLowerCase()} for ${doctor.name} on ${formatDisplayDate(form.date)}.`);
+      setFeedback(
+        editingBlockId
+          ? `Updated unavailable date for ${doctor.name} on ${formatDisplayDate(form.date)}.`
+          : `Saved ${form.reason.toLowerCase()} for ${doctor.name} on ${formatDisplayDate(form.date)}.`,
+      );
       setForm((current) => ({ ...current, note: "" }));
+      setEditingBlockId(null);
     });
+  }
+
+  function startEdit(record: (typeof blockedDates)[number]) {
+    setEditingBlockId(record.id);
+    setForm({
+      doctorId: record.doctorId,
+      date: record.date,
+      reason: record.reason,
+      note: record.note ?? "",
+    });
+    setFeedback(null);
   }
 
   function removeBlockedDay(id: string) {
@@ -183,8 +200,24 @@ export default function TimeSlotsPage() {
               disabled={!canManage || isSaving}
               className="rounded-xl bg-teal-700 px-5 py-3 font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-teal-300"
             >
-              {isSaving ? "Saving..." : "Add Unavailable Date"}
+              {isSaving
+                ? "Saving..."
+                : editingBlockId
+                  ? "Update Unavailable Date"
+                  : "Add Unavailable Date"}
             </button>
+            {editingBlockId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingBlockId(null);
+                  setForm(INITIAL_FORM);
+                }}
+                className="ml-2 rounded-xl border border-slate-200 px-5 py-3 font-semibold text-slate-700"
+              >
+                Cancel Edit
+              </button>
+            ) : null}
           </form>
         </div>
 
@@ -250,13 +283,22 @@ export default function TimeSlotsPage() {
                   <p className="mt-1 text-sm text-slate-500">{record.note || "No note provided."}</p>
                 </div>
                 {canManage ? (
-                  <button
-                    type="button"
-                    onClick={() => removeBlockedDay(record.id)}
-                    className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(record)}
+                      className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeBlockedDay(record.id)}
+                      className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 ) : null}
               </div>
             ))

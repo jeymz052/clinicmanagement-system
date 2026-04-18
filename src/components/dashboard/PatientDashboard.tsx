@@ -26,7 +26,8 @@ function upcomingComparator(a: AppointmentRecord, b: AppointmentRecord) {
 
 export default function PatientDashboard() {
   const { user } = useRole();
-  const email = user?.email ?? "";
+  const name =
+    user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "Patient";
   const { appointments, isLoading } = useAppointments();
 
   const today = isoToday();
@@ -48,7 +49,7 @@ export default function PatientDashboard() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-in-down">
-        <h1 className="text-2xl font-bold text-slate-900">Welcome back{email ? `, ${email.split("@")[0]}` : ""}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Welcome, {name}</h1>
         <p className="text-sm text-slate-500 mt-0.5">Your appointments and consultations at a glance.</p>
       </div>
 
@@ -77,7 +78,7 @@ export default function PatientDashboard() {
               <p className="text-sm text-slate-600 mt-0.5">
                 {next.type === "Online" ? "Online consultation" : "Clinic visit"} · Queue #{next.queueNumber}
               </p>
-              {next.reason ? <p className="text-sm text-slate-500 mt-1 italic">"{next.reason}"</p> : null}
+              {next.reason ? <p className="text-sm text-slate-500 mt-1 italic">&quot;{next.reason}&quot;</p> : null}
             </div>
             <div className="flex flex-col items-end gap-2">
               <span
@@ -133,7 +134,7 @@ export default function PatientDashboard() {
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-6 hover-lift">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-slate-900">Upcoming Appointments</h2>
-          <Link href="/appointments" className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors">
+          <Link href="/appointments/my" className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors">
             Book another →
           </Link>
         </div>
@@ -199,7 +200,7 @@ export default function PatientDashboard() {
         <h2 className="text-base font-bold text-slate-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <QuickAction href="/appointments" label="Book Appointment" color="teal" />
-          <QuickAction href="/appointments/list" label="View History" color="sky" />
+          <QuickAction href="/appointments/my" label="My Appointments" color="sky" />
           <QuickAction href="/payments" label="Payments" color="amber" />
         </div>
       </div>
