@@ -233,8 +233,8 @@ export default function POSBillingPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.24),transparent_30%),linear-gradient(135deg,#064e3b_0%,#0f766e_48%,#14532d_100%)] p-6 text-white shadow-sm">
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.24),transparent_30%),linear-gradient(135deg,#064e3b_0%,#0f766e_48%,#14532d_100%)] p-6 text-white shadow-[0_28px_70px_rgba(16,185,129,0.18)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Clinic POS / Billing System</p>
@@ -273,7 +273,7 @@ export default function POSBillingPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.18fr_0.82fr]">
         <div className="space-y-6">
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 1</p>
@@ -293,7 +293,7 @@ export default function POSBillingPage() {
                   value={selectedApptId}
                   onChange={(event) => setSelectedApptId(event.target.value)}
                   disabled={!canUse || !!issuedBillingId}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50"
+                  className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 >
                   <option value="">
                     {billableAppointments.length === 0 ? "No completed clinic visits yet" : "Select appointment"}
@@ -304,7 +304,7 @@ export default function POSBillingPage() {
                 </select>
               </label>
 
-              <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/40 px-4 py-4">
                 {selectedAppt ? (
                   <>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Patient</p>
@@ -321,7 +321,7 @@ export default function POSBillingPage() {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 2</p>
@@ -332,7 +332,7 @@ export default function POSBillingPage() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
               {catalogByCategory.map((group) => (
-                <div key={group.category} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                <div key={group.category} className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/30 p-4 shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-900">{group.category}</p>
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500">
@@ -348,7 +348,7 @@ export default function POSBillingPage() {
                           type="button"
                           onClick={() => addCatalogItem(item)}
                           disabled={!canUse || !!issuedBillingId}
-                          className="flex w-full items-center justify-between rounded-2xl border border-white bg-white px-3 py-3 text-left transition hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-400"
+                          className="flex w-full items-center justify-between rounded-[1.2rem] border border-white bg-white px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-400"
                         >
                           <span className="min-w-0 pr-3">
                             <span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span>
@@ -367,8 +367,8 @@ export default function POSBillingPage() {
               ))}
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-slate-200">
-              <div className="grid grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-emerald-100 shadow-sm">
+              <div className="grid grid-cols-12 gap-3 border-b border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                 <div className="col-span-12 md:col-span-4">Service</div>
                 <div className="col-span-4 md:col-span-2">Quantity</div>
                 <div className="col-span-4 md:col-span-2">Unit Price</div>
@@ -387,7 +387,7 @@ export default function POSBillingPage() {
                           else updateLine(line.tempId, { pricing_id: null });
                         }}
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-[1rem] border border-emerald-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                       >
                         <option value="">Pick Consultation, Lab, or Medicine</option>
                         {posPricing.map((item) => (
@@ -396,7 +396,7 @@ export default function POSBillingPage() {
                             </option>
                           ))}
                       </select>
-                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+                      <div className="mt-2 rounded-[1rem] border border-emerald-100 bg-emerald-50/40 px-3 py-2.5 text-sm text-slate-700">
                         {line.description || "No service selected"}
                       </div>
                     </div>
@@ -410,7 +410,7 @@ export default function POSBillingPage() {
                           updateLine(line.tempId, { quantity: Math.max(1, Number(event.target.value) || 1) })
                         }
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-[1rem] border border-emerald-100 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                       />
                     </div>
 
@@ -422,7 +422,7 @@ export default function POSBillingPage() {
                         value={line.unit_price}
                         onChange={(event) => updateLine(line.tempId, { unit_price: Number(event.target.value) || 0 })}
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-[1rem] border border-emerald-100 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                       />
                     </div>
 
@@ -457,7 +457,7 @@ export default function POSBillingPage() {
                   value={discount}
                   onChange={(event) => setDiscount(Math.max(0, Number(event.target.value) || 0))}
                   disabled={!canUse || !!issuedBillingId}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                 />
               </label>
 
@@ -470,7 +470,7 @@ export default function POSBillingPage() {
                   value={tax}
                   onChange={(event) => setTax(Math.max(0, Number(event.target.value) || 0))}
                   disabled={!canUse || !!issuedBillingId}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                 />
               </label>
             </div>
@@ -622,7 +622,7 @@ export default function POSBillingPage() {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">POS / Billing Rules</p>
             <div className="mt-4 space-y-3 text-sm text-slate-600">
               <Rule text="Applies only to clinic appointments." />

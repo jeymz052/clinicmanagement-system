@@ -199,8 +199,8 @@ export default function OnlinePaymentPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.2),transparent_32%),linear-gradient(135deg,#064e3b_0%,#0f766e_46%,#14532d_100%)] p-6 text-white shadow-sm">
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.2),transparent_32%),linear-gradient(135deg,#064e3b_0%,#0f766e_46%,#14532d_100%)] p-6 text-white shadow-[0_28px_70px_rgba(16,185,129,0.18)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Payment System</p>
@@ -218,7 +218,7 @@ export default function OnlinePaymentPage() {
         </div>
       </section>
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800 shadow-sm">
         Rule: if payment is not marked <span className="font-semibold">Paid</span>, the online consultation stays <span className="font-semibold">not confirmed</span>.
       </div>
 
@@ -239,7 +239,7 @@ export default function OnlinePaymentPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Online Payment Flow</p>
           <h2 className="mt-2 text-xl font-bold text-slate-900">Create and process payment</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -252,7 +252,7 @@ export default function OnlinePaymentPage() {
               <select
                 value={selectedAppointmentId}
                 onChange={(event) => setSelectedAppointmentId(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
               >
                 <option value="">Select appointment</option>
                 {pendingAppointments.map((appointment) => {
@@ -289,10 +289,10 @@ export default function OnlinePaymentPage() {
                 key={option.value}
                 type="button"
                 onClick={() => setSelectedMethod(option.value as OnlinePaymentMethod)}
-                className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${
+                className={`rounded-[1.5rem] border px-4 py-4 text-left transition-all duration-300 ${
                   selectedMethod === option.value
-                    ? "border-emerald-500 bg-emerald-50"
-                    : "border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"
+                    ? "border-emerald-500 bg-[linear-gradient(180deg,#ecfdf5_0%,#d1fae5_100%)] shadow-[0_16px_28px_rgba(16,185,129,0.14)]"
+                    : "border-emerald-100 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/40"
                 }`}
               >
                 <p className="text-sm font-bold text-slate-900">{option.title}</p>
@@ -301,7 +301,7 @@ export default function OnlinePaymentPage() {
             ))}
           </div>
 
-          <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+          <div className="mt-6 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/40 p-4 shadow-sm">
             {selectedAppointment ? (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Consultation</p>
@@ -323,7 +323,7 @@ export default function OnlinePaymentPage() {
               type="button"
               onClick={handleStartPayment}
               disabled={isLoading || isSubmitting || !selectedAppointmentId}
-              className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-700"
+              className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Processing..." : selectedMethod === "Card" ? "Start Card Payment" : "Create Payment Request"}
             </button>
@@ -334,7 +334,7 @@ export default function OnlinePaymentPage() {
                   type="button"
                   onClick={() => updateSelectedPaymentStatus("Paid")}
                   disabled={isSubmitting}
-                  className="rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                  className="rounded-full border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                 >
                   Mark Paid
                 </button>
@@ -342,7 +342,7 @@ export default function OnlinePaymentPage() {
                   type="button"
                   onClick={() => updateSelectedPaymentStatus("Failed")}
                   disabled={isSubmitting}
-                  className="rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                  className="rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                 >
                   Mark Failed
                 </button>
@@ -351,7 +351,7 @@ export default function OnlinePaymentPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status Board</p>
           <h2 className="mt-2 text-xl font-bold text-slate-900">Online payment statuses</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -365,7 +365,7 @@ export default function OnlinePaymentPage() {
                 const doctor = getDoctorById(appointment.doctorId);
 
                 return (
-                  <div key={appointment.id} className="rounded-[1.5rem] border border-slate-200 p-4">
+                  <div key={appointment.id} className="rounded-[1.5rem] border border-emerald-100 bg-white p-4 shadow-sm transition hover:bg-emerald-50/30">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{appointment.patientName}</p>

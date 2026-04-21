@@ -27,41 +27,44 @@ export default function CalendarViewPage() {
   const blockedLookup = buildBlockedDayLookup(blockedDates, selectedDoctor.id);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Calendar View</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Weekly doctor calendar with shared-slot conflict control and blocked leave days.
-          </p>
-        </div>
+    <div className="space-y-6 pb-8">
+      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Calendar</p>
+            <h1 className="mt-3 text-3xl font-black text-slate-900">Calendar View</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Shared-slot weekly calendar for clinic and online availability.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap gap-3">
-          <select
-            value={doctorId}
-            onChange={(event) => setDoctorId(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none ring-teal-200 focus:ring"
-          >
-            {DOCTORS.map((doctor) => (
-              <option key={doctor.id} value={doctor.id}>
-                {doctor.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setWeekStart(shiftDate(weekStart, -7))}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Previous Week
-          </button>
-          <button
-            type="button"
-            onClick={() => setWeekStart(shiftDate(weekStart, 7))}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Next Week
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <select
+              value={doctorId}
+              onChange={(event) => setDoctorId(event.target.value)}
+              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
+              {DOCTORS.map((doctor) => (
+                <option key={doctor.id} value={doctor.id}>
+                  {doctor.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setWeekStart(shiftDate(weekStart, -7))}
+              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+            >
+              Previous Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(shiftDate(weekStart, 7))}
+              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+            >
+              Next Week
+            </button>
+          </div>
         </div>
       </div>
 
@@ -71,26 +74,28 @@ export default function CalendarViewPage() {
         </div>
       ) : null}
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-200 hover:bg-teal-50 hover:border-teal-300 hover:scale-[1.03] animate-fade-in">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in">
         <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{selectedDoctor.name}</h2>
             <p className="text-sm text-slate-500">{selectedDoctor.specialty}</p>
           </div>
-          <p className="text-sm text-slate-500">Week of {formatDisplayDate(weekStart)}</p>
+          <p className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+            Week of {formatDisplayDate(weekStart)}
+          </p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-[900px] w-full text-sm">
             <thead>
               <tr>
-                <th className="border border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700">
                   Time
                 </th>
                 {weekDates.map((date) => (
                   <th
                     key={date}
-                    className="border border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700"
+                    className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700"
                   >
                     {formatDisplayDate(date)}
                   </th>
@@ -100,7 +105,7 @@ export default function CalendarViewPage() {
             <tbody>
               {templateSlots.map((slotTemplate) => (
                 <tr key={`${slotTemplate.start}-${slotTemplate.end}`}>
-                  <td className="border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-700">
+                  <td className="border border-emerald-100 bg-emerald-50/40 px-4 py-3 font-medium text-slate-700">
                     {formatRange(slotTemplate.start, slotTemplate.end)}
                   </td>
                   {weekDates.map((date) => {
@@ -123,7 +128,7 @@ export default function CalendarViewPage() {
                     return (
                       <td
                         key={`${date}-${slotTemplate.start}`}
-                        className="border border-slate-200 px-3 py-3"
+                        className="border border-emerald-100 px-3 py-3"
                       >
                         {slot ? <CalendarCell slot={slot} /> : null}
                       </td>
@@ -172,7 +177,7 @@ function CalendarCell({
   }
 
   return (
-    <div className={`rounded-2xl px-3 py-3 ${classes}`}>
+    <div className={`rounded-[1.25rem] px-3 py-3 shadow-sm ${classes}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.16em]">{summary}</p>
       <p className="mt-2 text-xs">{detail}</p>
     </div>

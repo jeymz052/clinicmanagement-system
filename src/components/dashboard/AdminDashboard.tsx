@@ -379,10 +379,19 @@ export default function AdminDashboard() {
   const sparkAppts = appointmentTrendsData.map((d) => d.Clinic + d.Online);
 
   return (
-    <div className="space-y-6">
-      <div className="animate-fade-in-down">
-        <h1 className="text-2xl font-bold text-slate-900">{greetingTitle}</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{greeting.subtitle}</p>
+    <div className="space-y-6 pb-8">
+      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)] animate-fade-in-down">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Clinic Overview</p>
+            <h1 className="mt-3 text-3xl font-black text-slate-900">{greetingTitle}</h1>
+            <p className="mt-3 text-sm text-slate-600 mt-0.5">{greeting.subtitle}</p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            {todayAppointments.length} appointments today
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -439,7 +448,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5">
+        <div className="min-w-0 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Patient Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
@@ -461,7 +470,7 @@ export default function AdminDashboard() {
           </ChartContainer>
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-6">
+        <div className="min-w-0 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Appointment Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
@@ -480,7 +489,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover-lift animate-fade-in-up stagger-7">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white px-5 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-7">
         <h3 className="text-base font-bold text-slate-900 mb-3">Overview</h3>
         <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <DonutSection title="Appointment Types" data={appointmentTypeData} colors={DONUT_COLORS_APPOINTMENT} />
@@ -490,15 +499,15 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6 hover-lift animate-fade-in-up stagger-8">
+        <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] space-y-6 animate-fade-in-up stagger-8">
           <Calendar appointments={appointments} />
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-8">
+        <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-8">
           <ActivityDetails appointments={appointments} />
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in-up stagger-8">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-8">
         <h2 className="text-base font-bold text-slate-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickAction label="Book Appointment" href="/appointments" color="teal" />
@@ -521,7 +530,7 @@ function QuickAction({ label, href, color }: { label: string; href: string; colo
   return (
     <Link
       href={href}
-      className={`group flex items-center justify-center gap-1.5 rounded-xl border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md ${colorMap[color]}`}
+      className={`group flex items-center justify-center gap-1.5 rounded-[1.2rem] border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_16px_30px_rgba(16,185,129,0.10)] ${colorMap[color]}`}
     >
       <span>{label}</span>
       <span className="opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0">→</span>

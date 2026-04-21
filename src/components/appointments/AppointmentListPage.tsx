@@ -30,7 +30,7 @@ const today = getClinicToday();
 
 export default function AppointmentListPage({
   title = "Appointment List",
-  description = "Manage clinic and online bookings with live shared-slot validation.",
+  description = "",
 }: AppointmentListPageProps) {
   const { accessToken, role } = useRole();
   const { doctors } = useDoctors();
@@ -143,14 +143,18 @@ export default function AppointmentListPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-6 pb-8">
+      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Appointments</p>
+            <h1 className="mt-3 text-3xl font-black text-slate-900">{title}</h1>
+          {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-          Edits reuse the same shared-slot rules as the booking form, so conflicting or full hours stay blocked here too.
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live booking overview
+          </div>
         </div>
       </div>
 
@@ -179,8 +183,8 @@ export default function AppointmentListPage({
           const isEditing = editingId === appointment.id && draft !== null;
 
           return (
-            <article key={appointment.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+            <article key={appointment.id} className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(16,185,129,0.10)]">
+              <div className="flex flex-col gap-4 border-b border-emerald-50 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-semibold text-slate-900">{appointment.patientName}</h2>
@@ -195,21 +199,21 @@ export default function AppointmentListPage({
 
                 <div className="flex flex-wrap gap-2">
                   {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
-                    <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
+                    <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">
                       Continue Payment
                     </button>
                   ) : null}
                   {appointment.meetingLink ? (
-                    <a href={appointment.meetingLink} target="_blank" rel="noreferrer" className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50">
+                    <a href={appointment.meetingLink} target="_blank" rel="noreferrer" className="rounded-full border border-emerald-200 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
                       Open Meeting Link
                     </a>
                   ) : null}
                   {canManage && !isEditing ? (
                     <>
-                      <button type="button" onClick={() => beginEdit(appointment)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                      <button type="button" onClick={() => beginEdit(appointment)} className="rounded-full border border-emerald-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
                         Edit
                       </button>
-                      <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                      <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-full border border-red-200 px-4 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-50">
                         Cancel
                       </button>
                     </>
@@ -220,31 +224,31 @@ export default function AppointmentListPage({
               {isEditing ? (
                 <div className="space-y-5 px-5 py-5">
                   <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Patient details</p>
+                    <div className="rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Patient details</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Patient name" />
-                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Email" />
-                        <input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Phone" />
-                        <input value={draft.reason} onChange={(event) => updateDraft("reason", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Reason" />
+                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Patient name" />
+                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Email" />
+                        <input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Phone" />
+                        <input value={draft.reason} onChange={(event) => updateDraft("reason", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Reason" />
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Schedule setup</p>
+                    <div className="rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Schedule setup</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <select value={draft.doctorId} onChange={(event) => updateDraft("doctorId", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+                        <select value={draft.doctorId} onChange={(event) => updateDraft("doctorId", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100">
                           {doctors.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.name}
                             </option>
                           ))}
                         </select>
-                        <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+                        <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100">
                           <option value="Clinic">Clinic</option>
                           <option value="Online">Online</option>
                         </select>
-                        <input type="date" min={today} value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                        <input type="date" min={today} value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
                         {nextAvailableSlot ? (
                           <button
                             type="button"
@@ -253,18 +257,18 @@ export default function AppointmentListPage({
                               updateDraft("start", nextAvailableSlot.slot.start);
                               updateDraft("end", nextAvailableSlot.slot.end);
                             }}
-                            className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-100"
+                            className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
                           >
                             Use next available
                           </button>
                         ) : (
-                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500">
+                          <div className="rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-500">
                             Pick a date to load available times.
                           </div>
                         )}
                       </div>
                       {blockedReason ? (
-                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        <div className="mt-3 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                           {blockedReason}
                         </div>
                       ) : null}
@@ -281,14 +285,13 @@ export default function AppointmentListPage({
                     }}
                     disabled={isUpdating}
                     loading={isLoadingAvailability}
-                    subtitle="Only available shared slots can be selected while editing."
                   />
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                    <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="rounded-full border border-emerald-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
                       Cancel
                     </button>
-                    <button type="button" onClick={saveDraft} disabled={isUpdating || !draft.start} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-teal-300">
+                    <button type="button" onClick={saveDraft} disabled={isUpdating || !draft.start} className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60">
                       {isUpdating ? "Saving..." : "Save Changes"}
                     </button>
                   </div>
@@ -314,9 +317,9 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
     sky: "text-sky-600",
   };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-teal-300 hover:bg-teal-50/40">
+    <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_16px_34px_rgba(16,185,129,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:bg-emerald-50/40 hover:shadow-[0_22px_40px_rgba(16,185,129,0.12)]">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className={`mt-3 text-3xl font-bold ${styles[tone]}`}>{value}</p>
+      <p className={`mt-3 text-3xl font-black ${styles[tone]}`}>{value}</p>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import { HttpError, type Actor, isStaff } from "@/src/lib/http";
 import type { Appointment, ApptType, Doctor } from "@/src/lib/db/types";
+import { getClinicToday, isPastInClinicTime } from "@/src/lib/timezone";
 import {
-  getDoctorScheduleForDate,
+  getSchedulableSlotsForDate,
   getAvailability,
   suggestNextSlot,
   getUnavailabilityForDate,
@@ -19,14 +20,16 @@ export type BookingInput = {
   reason?: string;
 };
 
-function assertWithinSchedule(
-  scheduleStart: string,
-  scheduleEnd: string,
+function assertMatchesSchedulableSlot(
+  slots: Array<{ start: string; end: string }>,
   slotStart: string,
   slotEnd: string,
 ) {
   const toSec = (t: string) => (t.length === 5 ? `${t}:00` : t);
-  if (toSec(slotStart) < toSec(scheduleStart) || toSec(slotEnd) > toSec(scheduleEnd)) {
+  const hasMatch = slots.some(
+    (slot) => toSec(slot.start) === toSec(slotStart) && toSec(slot.end) === toSec(slotEnd),
+  );
+  if (!hasMatch) {
     throw new HttpError(409, "Outside doctor's working hours");
   }
 }
@@ -74,11 +77,19 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
   if (input.start_time >= input.end_time)
     throw new HttpError(400, "start_time must be before end_time");
 
+  const clinicToday = getClinicToday();
+  if (input.appointment_date < clinicToday) {
+    throw new HttpError(409, "Past dates cannot be booked");
+  }
+  if (isPastInClinicTime(input.appointment_date, input.start_time)) {
+    throw new HttpError(409, "Past time slots cannot be booked");
+  }
+
   const supabase = getSupabaseAdmin();
 
-  const schedule = await getDoctorScheduleForDate(input.doctor_id, input.appointment_date);
-  if (!schedule) throw new HttpError(409, "Doctor is not working that day");
-  assertWithinSchedule(schedule.start_time, schedule.end_time, input.start_time, input.end_time);
+  const schedulableSlots = await getSchedulableSlotsForDate(input.doctor_id, input.appointment_date);
+  if (schedulableSlots.length === 0) throw new HttpError(409, "Doctor is not working that day");
+  assertMatchesSchedulableSlot(schedulableSlots, input.start_time, input.end_time);
 
   const blocks = await getUnavailabilityForDate(input.doctor_id, input.appointment_date);
   if (overlapsBlocks(input.appointment_date, input.start_time, input.end_time, blocks))

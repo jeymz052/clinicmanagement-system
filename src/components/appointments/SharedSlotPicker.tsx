@@ -9,7 +9,6 @@ type SharedSlotPickerProps = {
   disabled?: boolean;
   loading?: boolean;
   title?: string;
-  subtitle?: string;
 };
 
 export function SharedSlotPicker({
@@ -19,42 +18,50 @@ export function SharedSlotPicker({
   disabled = false,
   loading = false,
   title = "Time slot",
-  subtitle = "Shared doctor slots update live across clinic and online consultations.",
 }: SharedSlotPickerProps) {
   const availableSlots = slotStatuses.filter((slot) => slot.availableForType);
   const blockedSlots = slotStatuses.filter((slot) => !slot.availableForType);
   const selectedSlot = slotStatuses.find((slot) => slot.start === selectedStart) ?? null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f6fef9_100%)] p-5 shadow-[0_20px_60px_rgba(16,185,129,0.08)] transition-transform duration-300 hover:-translate-y-0.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-600">Time Selection</p>
+          <h3 className="mt-2 text-lg font-bold text-slate-900">{title}</h3>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          {availableSlots.length} available
-          {blockedSlots.length ? ` | ${blockedSlots.length} blocked` : ""}
-          {" | Max 5 patients per hour"}
+        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 shadow-sm">
+          <span>{availableSlots.length} open</span>
+          <span className="h-1 w-1 rounded-full bg-emerald-300" />
+          <span>{blockedSlots.length} blocked</span>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <InfoPill label="Validation" value="Doctor schedule + existing bookings" />
-        <InfoPill label="Conflict control" value="Clinic and Online share one slot pool" />
-        <InfoPill
-          label="Queue number"
-          value={selectedSlot?.nextQueueNumber ? `Auto-assigned as #${selectedSlot.nextQueueNumber}` : "Shown after you pick a free slot"}
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <SlotMetric
+          label="Available"
+          value={String(availableSlots.length)}
+          tone="emerald"
+        />
+        <SlotMetric
+          label="Blocked"
+          value={String(blockedSlots.length)}
+          tone="slate"
+        />
+        <SlotMetric
+          label="Queue"
+          value={selectedSlot?.nextQueueNumber ? `#${selectedSlot.nextQueueNumber}` : "--"}
+          tone="teal"
         />
       </div>
 
       {loading ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+        <div className="mt-4 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/70 px-4 py-5 text-sm text-emerald-900">
           Refreshing slot availability...
         </div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {slotStatuses.map((slot) => {
           const isSelected = selectedStart === slot.start;
           const available = slot.availableForType;
@@ -65,47 +72,81 @@ export function SharedSlotPicker({
               type="button"
               disabled={!available || disabled || loading}
               onClick={() => onSelect(slot.start)}
-              className={`rounded-2xl border px-3 py-3 text-left transition ${
+              className={`group rounded-[1.4rem] border px-4 py-4 text-left transition-all duration-200 ${
                 isSelected
-                  ? "border-teal-600 bg-teal-50 shadow-sm"
+                  ? "border-emerald-500 bg-[linear-gradient(180deg,#ecfdf5_0%,#d1fae5_100%)] shadow-[0_16px_35px_rgba(16,185,129,0.18)]"
                   : available
-                    ? "border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/50"
-                    : "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
+                    ? "border-emerald-100 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/40 hover:shadow-[0_14px_28px_rgba(16,185,129,0.12)]"
+                    : "cursor-not-allowed border-slate-200 bg-slate-50/80 opacity-70"
               }`}
             >
-              <p className={`text-sm font-semibold ${
-                isSelected ? "text-teal-700" : available ? "text-slate-900" : "text-slate-400"
-              }`}>
-                {formatRange(slot.start, slot.end)}
-              </p>
-
-              <div className="mt-2 flex items-center justify-between">
-                <span className={`text-[11px] ${
-                  isSelected ? "text-teal-600" : available ? "text-slate-500" : "text-slate-400"
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className={`text-sm font-semibold ${
+                    isSelected ? "text-emerald-800" : available ? "text-slate-900" : "text-slate-400"
+                  }`}>
+                    {formatRange(slot.start, slot.end)}
+                  </p>
+                  <p className={`mt-1 text-[11px] font-medium ${
+                    isSelected ? "text-emerald-700" : available ? "text-slate-500" : "text-slate-400"
+                  }`}>
+                    {slot.activeType ?? "Open"}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                  available
+                    ? isSelected
+                      ? "bg-white/80 text-emerald-700"
+                      : "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-200 text-slate-500"
                 }`}>
-                  {slot.activeType ? `${slot.activeType} active` : "Shared slot"}
+                  {available ? "Available" : "Blocked"}
+                </span>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <span className={`text-[11px] ${
+                  available ? "text-slate-500" : "text-red-500"
+                }`}>
+                  {available ? `Queue #${slot.nextQueueNumber}` : slot.reason}
                 </span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((dot) => (
                     <span
                       key={dot}
-                      className={`h-1.5 w-1.5 rounded-full ${
+                      className={`h-1.5 w-4 rounded-full transition-all ${
                         dot <= slot.bookedCount
                           ? slot.bookedCount >= 5
                             ? "bg-red-400"
-                            : "bg-teal-500"
-                          : "bg-slate-200"
+                            : "bg-emerald-500"
+                          : isSelected
+                            ? "bg-white/80"
+                            : "bg-slate-200"
                       }`}
                     />
                   ))}
                 </div>
               </div>
 
-              <p className={`mt-2 text-[11px] ${
-                available ? "text-slate-500" : "text-red-500"
+              <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${
+                isSelected ? "bg-white/70" : "bg-slate-100"
               }`}>
-                {available ? `Queue #${slot.nextQueueNumber}` : slot.reason}
-              </p>
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    slot.bookedCount === 0
+                      ? "w-1/12 bg-emerald-200"
+                      : slot.bookedCount === 1
+                        ? "w-1/5 bg-emerald-300"
+                        : slot.bookedCount === 2
+                          ? "w-2/5 bg-emerald-400"
+                          : slot.bookedCount === 3
+                            ? "w-3/5 bg-emerald-500"
+                            : slot.bookedCount === 4
+                              ? "w-4/5 bg-emerald-600"
+                              : "w-full bg-red-400"
+                  }`}
+                />
+              </div>
             </button>
           );
         })}
@@ -114,11 +155,25 @@ export function SharedSlotPicker({
   );
 }
 
-function InfoPill({ label, value }: { label: string; value: string }) {
+function SlotMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "emerald" | "slate" | "teal";
+}) {
+  const toneMap = {
+    emerald: "border-emerald-100 bg-emerald-50/80 text-emerald-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-600",
+    teal: "border-teal-100 bg-teal-50/80 text-teal-700",
+  };
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-800">{value}</p>
+    <div className={`rounded-[1.35rem] border px-4 py-3 shadow-sm ${toneMap[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em]">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
     </div>
   );
 }

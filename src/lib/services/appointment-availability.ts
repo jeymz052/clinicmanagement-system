@@ -2,7 +2,7 @@ import type { ApptType } from "@/src/lib/db/types";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import { normalizeClockTime, isPastInClinicTime } from "@/src/lib/timezone";
 import {
-  getDoctorScheduleForDate,
+  getSchedulableSlotsForDate,
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
 
@@ -23,27 +23,6 @@ function addDays(date: string, amount: number) {
   const next = new Date(`${date}T00:00:00Z`);
   next.setUTCDate(next.getUTCDate() + amount);
   return next.toISOString().slice(0, 10);
-}
-
-function addMinutes(time: string, minutes: number) {
-  const [hours, mins] = time.split(":").map(Number);
-  const total = hours * 60 + mins + minutes;
-  const hh = String(Math.floor(total / 60)).padStart(2, "0");
-  const mm = String(total % 60).padStart(2, "0");
-  return `${hh}:${mm}:00`;
-}
-
-function expandSlots(start: string, end: string, minutes: number) {
-  const slots: Array<{ start: string; end: string }> = [];
-  let cursor = normalizeClockTime(start);
-  const stop = normalizeClockTime(end);
-  while (cursor < stop) {
-    const next = addMinutes(cursor, minutes);
-    if (next > stop) break;
-    slots.push({ start: cursor, end: next });
-    cursor = next;
-  }
-  return slots;
 }
 
 function overlapsSlot(
@@ -89,8 +68,8 @@ export async function buildSharedDayAvailability(
   slots: SharedAvailabilitySlot[];
   blockedReason: string | null;
 }> {
-  const schedule = await getDoctorScheduleForDate(doctorId, date);
-  if (!schedule) {
+  const schedulableSlots = await getSchedulableSlotsForDate(doctorId, date);
+  if (schedulableSlots.length === 0) {
     return { slots: [], blockedReason: "Doctor is not working on this date." };
   }
 
@@ -116,7 +95,7 @@ export async function buildSharedDayAvailability(
     (row) => row.status !== "Cancelled" && row.status !== "NoShow",
   );
 
-  const slots = expandSlots(schedule.start_time, schedule.end_time, schedule.slot_minutes).map(
+  const slots = schedulableSlots.map(
     (slot): SharedAvailabilitySlot => {
       const overlapping = appointments
         .filter((row) => overlapsSlot(slot.start, slot.end, row.start_time, row.end_time))

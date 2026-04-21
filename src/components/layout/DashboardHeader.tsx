@@ -235,7 +235,6 @@ export function DashboardHeader({
               <div className="absolute right-0 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
                 <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
                   <p className="text-sm font-semibold text-slate-900">Notifications</p>
-                  <p className="mt-1 text-xs text-slate-500">Registration, booking, approval, reminders, payments, and meeting links.</p>
                 </div>
 
                 <div className="max-h-[24rem] overflow-y-auto">
@@ -274,7 +273,7 @@ export function DashboardHeader({
                     </div>
                   ) : (
                     <div className="px-5 py-8 text-center text-sm text-slate-500">
-                      No notifications yet for registration, booking, approval, reminders, or payment events.
+                      No notifications yet.
                     </div>
                   )}
                 </div>

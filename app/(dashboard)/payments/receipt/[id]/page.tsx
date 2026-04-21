@@ -98,20 +98,21 @@ export default function ReceiptPage({ params }: PageProps) {
       {/* Action bar — hidden in print */}
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Clinic POS Billing Receipt</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Receipt</p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">Clinic POS Billing Receipt</h1>
           <p className="text-sm text-slate-500">POS Bill #{billing.id.slice(0, 8).toUpperCase()}</p>
         </div>
         <button
           type="button"
           onClick={handlePrint}
-          className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+          className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5"
         >
           Print / Save as PDF
         </button>
       </div>
 
       {/* Printable card */}
-      <div className="print-receipt mx-auto max-w-3xl rounded-[2rem] border border-emerald-200 bg-white p-8 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+      <div className="print-receipt mx-auto max-w-3xl rounded-[2rem] border border-emerald-200 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-8 shadow-[0_18px_45px_rgba(15,23,42,0.06)] print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
         <div className="border-b border-emerald-200 pb-5 print:border-slate-300">
           <div className="flex items-start justify-between">
             <div>

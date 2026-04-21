@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { SLOT_TEMPLATES_BY_DOCTOR } from "@/src/lib/appointments";
 import { isPastInClinicTime } from "@/src/lib/timezone";
 import type {
   DoctorSchedule,
@@ -12,6 +13,11 @@ export type Slot = {
   remaining: number;
   disabled: boolean;
   reason?: "full" | "blocked" | "past";
+};
+
+export type SchedulableSlot = {
+  start: string;
+  end: string;
 };
 
 function dayOfWeek(dateStr: string) {
@@ -37,6 +43,45 @@ function expandSlots(start: string, end: string, minutes: number) {
     cursor = next;
   }
   return slots;
+}
+
+async function getDoctorTemplateKey(doctorId: string) {
+  if (SLOT_TEMPLATES_BY_DOCTOR[doctorId]) {
+    return doctorId;
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("doctors")
+    .select("slug")
+    .eq("id", doctorId)
+    .maybeSingle<{ slug: string | null }>();
+  if (error) throw error;
+
+  const slug = data?.slug ?? null;
+  if (slug && SLOT_TEMPLATES_BY_DOCTOR[slug]) {
+    return slug;
+  }
+
+  return null;
+}
+
+export async function getSchedulableSlotsForDate(
+  doctorId: string,
+  date: string,
+): Promise<SchedulableSlot[]> {
+  const schedule = await getDoctorScheduleForDate(doctorId, date);
+  if (schedule) {
+    return expandSlots(schedule.start_time, schedule.end_time, schedule.slot_minutes);
+  }
+
+  const templateKey = await getDoctorTemplateKey(doctorId);
+  if (!templateKey) return [];
+
+  return (SLOT_TEMPLATES_BY_DOCTOR[templateKey] ?? []).map((slot) => ({
+    start: slot.start.length === 5 ? `${slot.start}:00` : slot.start,
+    end: slot.end.length === 5 ? `${slot.end}:00` : slot.end,
+  }));
 }
 
 export async function getDoctorScheduleForDate(
@@ -86,11 +131,9 @@ function overlapsUnavailable(
 }
 
 export async function getAvailability(doctorId: string, date: string): Promise<Slot[]> {
-  const schedule = await getDoctorScheduleForDate(doctorId, date);
-  if (!schedule) return [];
-
   const supabase = getSupabaseAdmin();
-  const slots = expandSlots(schedule.start_time, schedule.end_time, schedule.slot_minutes);
+  const slots = await getSchedulableSlotsForDate(doctorId, date);
+  if (slots.length === 0) return [];
   const blocks = await getUnavailabilityForDate(doctorId, date);
 
   const { data: counts, error } = await supabase

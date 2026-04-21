@@ -13,8 +13,9 @@ import {
   mapV2RowToLegacy,
   resolveDoctorIdBySlug,
 } from "@/src/lib/server/legacy-bridge";
+import { getClinicToday, isPastInClinicTime } from "@/src/lib/timezone";
 import {
-  getDoctorScheduleForDate,
+  getSchedulableSlotsForDate,
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
 import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
@@ -70,24 +71,21 @@ function overlapsBlocks(
   });
 }
 
-function isWithinSchedule(
-  scheduleStart: string,
-  scheduleEnd: string,
-  slotStart: string,
-  slotEnd: string,
-) {
-  return (
-    normalizeTime(slotStart) >= normalizeTime(scheduleStart) &&
-    normalizeTime(slotEnd) <= normalizeTime(scheduleEnd)
-  );
-}
-
 async function buildConflictHint(doctorUuid: string, date: string, type: AppointmentType) {
   const next = await findNextAvailableSharedSlot(doctorUuid, date, type, 14);
   if (!next) return "";
   return next.date === date
     ? ` Next available: ${next.slot.start}-${next.slot.end}.`
     : ` Next available: ${next.date} ${next.slot.start}-${next.slot.end}.`;
+}
+
+function matchesExactSlot(
+  slot: { start: string; end: string },
+  start: string,
+  end: string,
+) {
+  return normalizeTime(slot.start) === normalizeTime(start)
+    && normalizeTime(slot.end) === normalizeTime(end);
 }
 
 async function validateSharedSlotOrThrow(input: {
@@ -99,12 +97,23 @@ async function validateSharedSlotOrThrow(input: {
   ignoreAppointmentId?: string;
 }) {
   const supabase = getSupabaseAdmin();
-  const schedule = await getDoctorScheduleForDate(input.doctorUuid, input.date);
-  if (!schedule) {
+  const clinicToday = getClinicToday();
+  if (input.date < clinicToday) {
+    throw new Error("Past dates cannot be booked.");
+  }
+  if (isPastInClinicTime(input.date, input.start_time)) {
+    throw new Error("Past time slots cannot be booked.");
+  }
+
+  const schedulableSlots = await getSchedulableSlotsForDate(input.doctorUuid, input.date);
+  if (schedulableSlots.length === 0) {
     throw new Error("Doctor is not working on the selected date.");
   }
 
-  if (!isWithinSchedule(schedule.start_time, schedule.end_time, input.start_time, input.end_time)) {
+  const exactSlot = schedulableSlots.find((slot) =>
+    matchesExactSlot(slot, input.start_time, input.end_time),
+  );
+  if (!exactSlot) {
     throw new Error("Selected time is outside the doctor's working hours.");
   }
 
@@ -236,7 +245,7 @@ export async function readAppointments(
   return hydrateRows((data ?? []) as V2Appointment[]);
 }
 
-export async function writeAppointments(_appointments: AppointmentRecord[]) {
+export async function writeAppointments() {
   throw new Error("writeAppointments() is deprecated â€” use v2 booking service");
 }
 

@@ -69,15 +69,19 @@ export function useDoctors() {
         if (nextDoctors.length > 0) {
           setDoctors(nextDoctors);
         }
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     }
 
     void load();
     return () => {
       if (!controller.signal.aborted) {
-        controller.abort(new DOMException("Doctors request was cancelled", "AbortError"));
+        controller.abort();
       }
     };
   }, [accessToken]);

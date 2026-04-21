@@ -13,7 +13,7 @@ type MyAppointmentsPageProps = {
 
 export default function MyAppointmentsPage({
   title = "My Appointments",
-  description = "Track your bookings, queue numbers, payment steps, and meeting access in one place.",
+  description = "",
 }: MyAppointmentsPageProps) {
   const { appointments, isLoading, error } = useAppointments();
   const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
@@ -41,32 +41,35 @@ export default function MyAppointmentsPage({
   const visibleAppointments = activeTab === "upcoming" ? upcoming : history;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-6 pb-8">
+      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Appointments</p>
+            <h1 className="mt-3 text-3xl font-black text-slate-900">{title}</h1>
+          {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
         </div>
         <Link
           href="/appointments"
-          className="inline-flex items-center justify-center rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+            className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(16,185,129,0.28)]"
         >
           Book Another Appointment
         </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard label="Upcoming" value={upcoming.length} hint="Scheduled visits ahead" tone="teal" />
-        <MetricCard label="Pending Payment" value={pendingPaymentCount} hint="Online consults awaiting payment" tone="amber" />
-        <MetricCard label="Meeting Links Ready" value={onlineReadyCount} hint="Online consults ready to join" tone="sky" />
+        <MetricCard label="Upcoming" value={upcoming.length} tone="teal" />
+        <MetricCard label="Pending Payment" value={pendingPaymentCount} tone="amber" />
+        <MetricCard label="Meeting Links Ready" value={onlineReadyCount} tone="sky" />
       </div>
 
       {nextAppointment ? (
-        <div className="rounded-3xl border border-teal-200 bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,0.12),_transparent_28%),linear-gradient(135deg,_#f0fdfa,_#ffffff_55%,_#eff6ff)] p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.14),_transparent_28%),linear-gradient(135deg,_#f0fdf4,_#ffffff_55%,_#ecfeff)] p-6 shadow-[0_20px_45px_rgba(16,185,129,0.12)] transition hover:-translate-y-0.5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Next Appointment</p>
-              <p className="mt-1 text-xl font-bold text-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Next Appointment</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">
                 {formatDisplayDate(nextAppointment.date)} | {formatRange(nextAppointment.start, nextAppointment.end)}
               </p>
               <p className="mt-1 text-sm text-slate-600">
@@ -80,7 +83,7 @@ export default function MyAppointmentsPage({
               {nextAppointment.status === "Pending Payment" ? (
                 <Link
                   href={`/payments?appointmentId=${nextAppointment.id}`}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                  className="rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-700"
                 >
                   Complete Payment
                 </Link>
@@ -90,7 +93,7 @@ export default function MyAppointmentsPage({
                   href={nextAppointment.meetingLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                  className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700"
                 >
                   Join Consultation
                 </a>
@@ -104,8 +107,8 @@ export default function MyAppointmentsPage({
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       ) : null}
 
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <div className="flex items-center gap-2 border-b border-emerald-100 px-5 py-4">
           <TabButton label="Upcoming" active={activeTab === "upcoming"} onClick={() => setActiveTab("upcoming")} />
           <TabButton label="History" active={activeTab === "history"} onClick={() => setActiveTab("history")} />
         </div>
@@ -121,11 +124,11 @@ export default function MyAppointmentsPage({
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-emerald-50">
             {visibleAppointments.map((appointment) => {
               const doctor = getDoctorById(appointment.doctorId);
               return (
-                <div key={appointment.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                <div key={appointment.id} className="flex flex-col gap-4 px-5 py-5 transition-colors hover:bg-emerald-50/40 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-900">
@@ -145,7 +148,7 @@ export default function MyAppointmentsPage({
                     {appointment.status === "Pending Payment" ? (
                       <Link
                         href={`/payments?appointmentId=${appointment.id}`}
-                        className="rounded-lg border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50"
+                        className="rounded-full border border-amber-200 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
                       >
                         Complete Payment
                       </Link>
@@ -155,7 +158,7 @@ export default function MyAppointmentsPage({
                         href={appointment.meetingLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+                        className="rounded-full border border-emerald-200 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                       >
                         Open Meeting Link
                       </a>
@@ -174,12 +177,10 @@ export default function MyAppointmentsPage({
 function MetricCard({
   label,
   value,
-  hint,
   tone,
 }: {
   label: string;
   value: number;
-  hint: string;
   tone: "teal" | "amber" | "sky";
 }) {
   const accent = {
@@ -189,11 +190,10 @@ function MetricCard({
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className={`absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+    <div className="relative overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_16px_34px_rgba(16,185,129,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_40px_rgba(16,185,129,0.12)]">
+      <div className={`absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10 ${accent[tone]}`} />
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-black text-slate-900">{value}</p>
     </div>
   );
 }
@@ -203,8 +203,8 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-        active ? "bg-teal-700 text-white" : "text-slate-600 hover:bg-slate-100"
+      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+        active ? "bg-[linear-gradient(135deg,#059669,#10b981)] text-white shadow-sm" : "text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
       }`}
     >
       {label}
