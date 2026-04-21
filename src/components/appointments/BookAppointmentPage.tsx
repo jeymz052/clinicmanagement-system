@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { createAppointmentAction } from "@/app/(dashboard)/appointments/actions";
