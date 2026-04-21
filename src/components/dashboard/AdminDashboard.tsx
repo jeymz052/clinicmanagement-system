@@ -53,6 +53,24 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+function ChartContainer({
+  className,
+  minHeight,
+  children,
+}: {
+  className: string;
+  minHeight: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`${className} min-w-0`}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={minHeight}>
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -253,8 +271,7 @@ function ActivityDetails({ appointments }: { appointments: AppointmentRecord[] }
 function MiniSparkline({ data, color }: { data: number[]; color: string }) {
   const chartData = data.map((v, i) => ({ i, v }));
   return (
-    <div className="w-24 h-8">
-      <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer className="h-8 w-24" minHeight={32}>
         <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
           <defs>
             <linearGradient id={`spark-${color}`} x1="0" y1="0" x2="0" y2="1">
@@ -264,8 +281,7 @@ function MiniSparkline({ data, color }: { data: number[]; color: string }) {
           </defs>
           <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#spark-${color})`} dot={false} />
         </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    </ChartContainer>
   );
 }
 
@@ -304,8 +320,7 @@ function DonutSection({
           {emptyLabel}
         </div>
       ) : (
-        <div className="w-20 h-20">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer className="h-20 w-20" minHeight={80}>
             <PieChart>
               <Pie data={data} cx="50%" cy="50%" innerRadius={22} outerRadius={36} paddingAngle={3} dataKey="value" strokeWidth={0}>
                 {data.map((_, i) => (
@@ -313,8 +328,7 @@ function DonutSection({
                 ))}
               </Pie>
             </PieChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       )}
       <div className="mt-2 space-y-1 w-full">
         {data.map((d, i) => (
@@ -425,13 +439,12 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5">
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Patient Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
           </div>
-          <div className="w-full h-56">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer className="h-56 w-full" minHeight={224}>
               <AreaChart data={weeklyPatientData} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="patientGrad" x1="0" y1="0" x2="0" y2="1">
@@ -445,17 +458,15 @@ export default function AdminDashboard() {
                 <Tooltip contentStyle={{ borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px" }} />
                 <Area type="monotone" dataKey="patients" stroke="#14b8a6" strokeWidth={2.5} fill="url(#patientGrad)" dot={{ r: 4, fill: "#14b8a6", strokeWidth: 2, stroke: "#fff" }} />
               </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-6">
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-900">Appointment Trends</h2>
             <span className="text-xs text-slate-400">Last 7 days</span>
           </div>
-          <div className="w-full h-56">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer className="h-56 w-full" minHeight={224}>
               <BarChart data={appointmentTrendsData} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#94a3b8" }} />
@@ -465,14 +476,13 @@ export default function AdminDashboard() {
                 <Bar dataKey="Clinic" fill="#14b8a6" radius={[6, 6, 0, 0]} barSize={20} />
                 <Bar dataKey="Online" fill="#38bdf8" radius={[6, 6, 0, 0]} barSize={20} />
               </BarChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
         </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover-lift animate-fade-in-up stagger-7">
         <h3 className="text-base font-bold text-slate-900 mb-3">Overview</h3>
-        <div className="grid grid-cols-3 divide-x divide-slate-100">
+        <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <DonutSection title="Appointment Types" data={appointmentTypeData} colors={DONUT_COLORS_APPOINTMENT} />
           <DonutSection title="Patient Status" data={patientStatusData} colors={DONUT_COLORS_PATIENT} />
           <DonutSection title="Payment Status" data={paymentStatusData} colors={DONUT_COLORS_PAYMENT} />

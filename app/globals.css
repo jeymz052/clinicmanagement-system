@@ -122,3 +122,25 @@ body {
   }
   .hover-lift { transition: none; }
 }
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    min-height: auto;
+    background-image: none !important;
+  }
+
+  .print-receipt {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

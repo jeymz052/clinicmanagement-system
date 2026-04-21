@@ -11,10 +11,22 @@ import type { Session, User } from "@supabase/supabase-js";
 import { DEFAULT_ROLE, type UserRole } from "@/src/lib/roles";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase/client";
 
+type UserProfile = {
+  id: string;
+  email: string;
+  phone: string | null;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 type RoleContextValue = {
   role: UserRole;
   session: Session | null;
   user: User | null;
+  profile: UserProfile | null;
   isLoading: boolean;
   accessToken: string | null;
   signOut: () => Promise<void>;
@@ -82,10 +94,35 @@ async function fetchRoleFromApi(accessToken: string): Promise<UserRole | null> {
   return null;
 }
 
+async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | null> {
+  const attempts = 3;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch("/api/v2/me", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) continue;
+      const payload = (await res.json()) as { profile?: UserProfile };
+      if (payload.profile) return payload.profile;
+    } catch {
+      // Network timeouts can happen in local dev; retry briefly before fallback.
+    }
+
+    if (attempt < attempts) {
+      await new Promise((resolve) => setTimeout(resolve, 350 * attempt));
+    }
+  }
+
+  return null;
+}
+
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(DEFAULT_ROLE);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -100,11 +137,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       if (nextSession?.user) {
         // Optimistic role from metadata, then refine from profiles table
         setRole(readRoleFromUser(nextSession.user));
-        const dbRole = await fetchRoleFromApi(nextSession.access_token);
+        const [dbRole, dbProfile] = await Promise.all([
+          fetchRoleFromApi(nextSession.access_token),
+          fetchProfileFromApi(nextSession.access_token),
+        ]);
         if (!active) return;
         if (dbRole) setRole(dbRole);
+        setProfile(dbProfile);
       } else {
         setRole(DEFAULT_ROLE);
+        setProfile(null);
       }
       setIsLoading(false);
     }
@@ -142,6 +184,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         role,
         session,
         user,
+        profile,
         isLoading,
         accessToken: session?.access_token ?? null,
         signOut,

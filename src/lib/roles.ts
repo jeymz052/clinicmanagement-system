@@ -55,6 +55,10 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   },
   {
+    prefixes: ["/profile"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+  },
+  {
     prefixes: ["/users"],
     allowedRoles: ["SUPER_ADMIN"],
   },
@@ -63,7 +67,7 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   },
   {
-    prefixes: ["/payments/invoices", "/payments/pos"],
+    prefixes: ["/payments/pos"],
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
   },
   {
@@ -87,8 +91,12 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
   },
   {
-    prefixes: ["/reports", "/settings", "/help", "/pricing"],
+    prefixes: ["/reports", "/help", "/pricing"],
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
+  },
+  {
+    prefixes: ["/settings"],
+    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   },
 ];
 

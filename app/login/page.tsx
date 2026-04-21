@@ -278,11 +278,11 @@ export default function LoginPage() {
           <Image
             src="/images/chiaralogo.png"
             alt="Chiara Logo"
-            width={230}
-            height={82}
+            width={669}
+            height={373}
             priority
             quality={100}
-            style={{ height: "auto" }}
+            style={{ width: "230px", height: "auto" }}
             className="object-contain drop-shadow-lg -mt-3 -mb-4"
           />
         </div>

@@ -13,6 +13,11 @@ import {
   mapV2RowToLegacy,
   resolveDoctorIdBySlug,
 } from "@/src/lib/server/legacy-bridge";
+import {
+  getDoctorScheduleForDate,
+  getUnavailabilityForDate,
+} from "@/src/lib/services/schedule";
+import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
 
 export type AppointmentCreatePayload = {
   patientName: string;
@@ -31,6 +36,127 @@ const MEETING_BASE = process.env.MEETING_BASE_URL ?? "https://meet.chiara.clinic
 
 function buildMeetingLink(apptId: string) {
   return `${MEETING_BASE}/${apptId}-${randomUUID().slice(0, 8)}`;
+}
+
+function normalizeTime(time: string) {
+  return time.length === 5 ? `${time}:00` : time;
+}
+
+function overlapsSlot(
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string,
+) {
+  const aStart = normalizeTime(startA);
+  const aEnd = normalizeTime(endA);
+  const bStart = normalizeTime(startB);
+  const bEnd = normalizeTime(endB);
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function overlapsBlocks(
+  date: string,
+  start: string,
+  end: string,
+  blocks: { starts_at: string; ends_at: string }[],
+) {
+  const from = new Date(`${date}T${normalizeTime(start)}Z`).getTime();
+  const to = new Date(`${date}T${normalizeTime(end)}Z`).getTime();
+  return blocks.some((block) => {
+    const blockFrom = new Date(block.starts_at).getTime();
+    const blockTo = new Date(block.ends_at).getTime();
+    return blockFrom < to && blockTo > from;
+  });
+}
+
+function isWithinSchedule(
+  scheduleStart: string,
+  scheduleEnd: string,
+  slotStart: string,
+  slotEnd: string,
+) {
+  return (
+    normalizeTime(slotStart) >= normalizeTime(scheduleStart) &&
+    normalizeTime(slotEnd) <= normalizeTime(scheduleEnd)
+  );
+}
+
+async function buildConflictHint(doctorUuid: string, date: string, type: AppointmentType) {
+  const next = await findNextAvailableSharedSlot(doctorUuid, date, type, 14);
+  if (!next) return "";
+  return next.date === date
+    ? ` Next available: ${next.slot.start}-${next.slot.end}.`
+    : ` Next available: ${next.date} ${next.slot.start}-${next.slot.end}.`;
+}
+
+async function validateSharedSlotOrThrow(input: {
+  doctorUuid: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  type: AppointmentType;
+  ignoreAppointmentId?: string;
+}) {
+  const supabase = getSupabaseAdmin();
+  const schedule = await getDoctorScheduleForDate(input.doctorUuid, input.date);
+  if (!schedule) {
+    throw new Error("Doctor is not working on the selected date.");
+  }
+
+  if (!isWithinSchedule(schedule.start_time, schedule.end_time, input.start_time, input.end_time)) {
+    throw new Error("Selected time is outside the doctor's working hours.");
+  }
+
+  const blocks = await getUnavailabilityForDate(input.doctorUuid, input.date);
+  if (overlapsBlocks(input.date, input.start_time, input.end_time, blocks)) {
+    const hint = await buildConflictHint(input.doctorUuid, input.date, input.type);
+    throw new Error(`Doctor is unavailable during that time.${hint}`);
+  }
+
+  let query = supabase
+    .from("appointments")
+    .select("id, queue_number, status, start_time, end_time, appointment_type")
+    .eq("doctor_id", input.doctorUuid)
+    .eq("appointment_date", input.date);
+
+  if (input.ignoreAppointmentId) {
+    query = query.neq("id", input.ignoreAppointmentId);
+  }
+
+  const { data: existing, error } = await query;
+  if (error) throw error;
+
+  const active = (existing ?? []).filter((row) =>
+    legacyStatusMatchesLiving(row.status as V2Appointment["status"]),
+  );
+  const overlapping = active.filter((row) =>
+    overlapsSlot(input.start_time, input.end_time, row.start_time, row.end_time),
+  );
+
+  const conflictingType = overlapping.find(
+    (row) => row.appointment_type !== input.type,
+  );
+  if (conflictingType) {
+    const hint = await buildConflictHint(input.doctorUuid, input.date, input.type);
+    throw new Error(
+      `${conflictingType.appointment_type} booking already occupies this shared slot.${hint}`,
+    );
+  }
+
+  if (overlapping.length >= 5) {
+    const hint = await buildConflictHint(input.doctorUuid, input.date, input.type);
+    throw new Error(`This slot is already full (max 5 patients).${hint}`);
+  }
+
+  const used = new Set(overlapping.map((row) => row.queue_number as number));
+  let queueNumber = 1;
+  while (queueNumber <= 5 && used.has(queueNumber)) queueNumber += 1;
+  if (queueNumber > 5) {
+    throw new Error("This slot is already full (max 5 patients).");
+  }
+
+  return { queueNumber };
 }
 
 async function hydrateRows(rows: V2Appointment[]): Promise<AppointmentRecord[]> {
@@ -83,7 +209,6 @@ export async function readAppointments(
 ): Promise<AppointmentRecord[]> {
   const supabase = getSupabaseAdmin();
 
-  // Resolve patientId from email if provided
   let patientId = filter.patientId;
   if (!patientId && filter.patientEmail) {
     const { data } = await supabase
@@ -112,7 +237,7 @@ export async function readAppointments(
 }
 
 export async function writeAppointments(_appointments: AppointmentRecord[]) {
-  throw new Error("writeAppointments() is deprecated — use v2 booking service");
+  throw new Error("writeAppointments() is deprecated â€” use v2 booking service");
 }
 
 export async function createPersistedAppointment(payload: AppointmentCreatePayload) {
@@ -127,51 +252,13 @@ export async function createPersistedAppointment(payload: AppointmentCreatePaylo
 
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
-
-    const { data: existing, error: existingErr } = await supabase
-      .from("appointments")
-      .select("queue_number, status")
-      .eq("doctor_id", doctorUuid)
-      .eq("appointment_date", payload.date)
-      .eq("start_time", start_time);
-    if (existingErr) throw existingErr;
-
-    const active = (existing ?? []).filter((r) =>
-      legacyStatusMatchesLiving(r.status as V2Appointment["status"]),
-    );
-    if (active.length >= 5) {
-      return {
-        ok: false as const,
-        message: "That slot is no longer available. Please choose another time.",
-        appointments: await readAppointments(),
-      };
-    }
-    const used = new Set(active.map((r) => r.queue_number as number));
-    let queue_number = 1;
-    while (queue_number <= 5 && used.has(queue_number)) queue_number++;
-
-    const { data: leave, error: leaveErr } = await supabase
-      .from("doctor_unavailability")
-      .select("starts_at, ends_at")
-      .eq("doctor_id", doctorUuid)
-      .lt("starts_at", `${payload.date}T23:59:59Z`)
-      .gt("ends_at", `${payload.date}T00:00:00Z`);
-    if (leaveErr) throw leaveErr;
-
-    const slotFrom = new Date(`${payload.date}T${start_time}Z`).getTime();
-    const slotTo = new Date(`${payload.date}T${end_time}Z`).getTime();
-    const overlaps = (leave ?? []).some((b) => {
-      const from = new Date(b.starts_at as string).getTime();
-      const to = new Date(b.ends_at as string).getTime();
-      return from < slotTo && to > slotFrom;
+    const { queueNumber } = await validateSharedSlotOrThrow({
+      doctorUuid,
+      date: payload.date,
+      start_time,
+      end_time,
+      type: payload.type,
     });
-    if (overlaps) {
-      return {
-        ok: false as const,
-        message: "The doctor is unavailable at that time.",
-        appointments: await readAppointments(),
-      };
-    }
 
     const status = payload.type === "Online" ? "PendingPayment" : "Confirmed";
 
@@ -186,7 +273,7 @@ export async function createPersistedAppointment(payload: AppointmentCreatePaylo
         appointment_type: payload.type,
         reason: payload.reason,
         status,
-        queue_number,
+        queue_number: queueNumber,
       })
       .select()
       .single<V2Appointment>();
@@ -195,7 +282,9 @@ export async function createPersistedAppointment(payload: AppointmentCreatePaylo
     const appointment = (await hydrateRows([inserted]))[0];
     return {
       ok: true as const,
-      message: "Appointment booked successfully.",
+      message: payload.type === "Online"
+        ? "Appointment reserved. Complete payment to confirm your online consultation."
+        : "Appointment booked successfully.",
       appointment,
       appointments: await readAppointments(),
     };
@@ -228,6 +317,25 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
     const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
+    const { queueNumber } = await validateSharedSlotOrThrow({
+      doctorUuid,
+      date: payload.date,
+      start_time,
+      end_time,
+      type: payload.type,
+      ignoreAppointmentId: payload.id,
+    });
+
+    const status =
+      payload.type === "Online"
+        ? existing.status === "Confirmed" && existing.meeting_link
+          ? "Confirmed"
+          : "PendingPayment"
+        : existing.status === "Completed"
+          ? "Completed"
+          : "Confirmed";
+
+    const meeting_link = payload.type === "Online" ? existing.meeting_link : null;
 
     const { error: updateErr } = await supabase
       .from("appointments")
@@ -238,6 +346,9 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
         end_time,
         appointment_type: payload.type,
         reason: payload.reason,
+        status,
+        meeting_link,
+        queue_number: queueNumber,
       })
       .eq("id", payload.id);
     if (updateErr) {
@@ -382,9 +493,8 @@ export async function markClinicAppointmentComplete(appointmentId: string) {
 export async function syncAppointmentsToSupabase() {
   return {
     ok: false as const,
-    message: "Sync is no longer required — appointments live in Supabase.",
+    message: "Sync is no longer required â€” appointments live in Supabase.",
   };
 }
 
-// Re-export for callers that imported the slug resolver via this module.
 export { getDoctorSlugById };

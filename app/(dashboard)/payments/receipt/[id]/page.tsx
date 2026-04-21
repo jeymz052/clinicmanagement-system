@@ -94,12 +94,12 @@ export default function ReceiptPage({ params }: PageProps) {
   const balance = Number(billing.total) - paidTotal;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0">
       {/* Action bar — hidden in print */}
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Receipt</h1>
-          <p className="text-sm text-slate-500">Billing #{billing.id.slice(0, 8)}</p>
+          <h1 className="text-2xl font-bold text-slate-900">Clinic POS Billing Receipt</h1>
+          <p className="text-sm text-slate-500">POS Bill #{billing.id.slice(0, 8).toUpperCase()}</p>
         </div>
         <button
           type="button"
@@ -111,21 +111,22 @@ export default function ReceiptPage({ params }: PageProps) {
       </div>
 
       {/* Printable card */}
-      <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm print:border-0 print:shadow-none">
-        <div className="border-b border-slate-200 pb-4">
+      <div className="print-receipt mx-auto max-w-3xl rounded-[2rem] border border-emerald-200 bg-white p-8 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div className="border-b border-emerald-200 pb-5 print:border-slate-300">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">CHIARA Clinic</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Official Receipt</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 print:text-slate-700">CHIARA Clinic</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">Official Clinic POS Billing Receipt</h2>
+              <p className="mt-1 text-xs text-slate-500">Clinic POS / Billing System - Receipt Copy</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-slate-500">Receipt #</p>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-right print:border-slate-300 print:bg-transparent">
+              <p className="text-xs text-slate-500">POS Bill / Receipt #</p>
               <p className="text-sm font-mono font-semibold text-slate-900">{billing.id.slice(0, 8).toUpperCase()}</p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 py-4 text-sm border-b border-slate-200">
+        <div className="grid grid-cols-2 gap-4 py-5 text-sm border-b border-slate-200 print:border-slate-300">
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider">Issued</p>
             <p className="text-slate-800 font-medium mt-1">
@@ -135,7 +136,7 @@ export default function ReceiptPage({ params }: PageProps) {
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider">Status</p>
             <p
-              className={`mt-1 inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
+              className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
                 billing.status === "Paid"
                   ? "bg-emerald-50 text-emerald-700"
                   : billing.status === "Issued"
@@ -149,20 +150,20 @@ export default function ReceiptPage({ params }: PageProps) {
         </div>
 
         {/* Line items */}
-        <div className="py-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Services</p>
+        <div className="py-5">
+          <p className="mb-3 text-xs text-slate-500 uppercase tracking-wider">Clinic POS Bill Details</p>
           <table className="w-full text-sm">
-            <thead className="text-slate-600 border-b border-slate-200">
+            <thead className="border-b border-slate-200 text-slate-600 print:border-slate-300">
               <tr>
                 <th className="text-left font-semibold py-2">Description</th>
                 <th className="text-center font-semibold py-2 w-16">Qty</th>
-                <th className="text-right font-semibold py-2 w-24">Unit</th>
-                <th className="text-right font-semibold py-2 w-28">Total</th>
+                <th className="text-right font-semibold py-2 w-24">Unit Price</th>
+                <th className="text-right font-semibold py-2 w-28">Line Total</th>
               </tr>
             </thead>
             <tbody>
               {billing.billing_items.map((item) => (
-                <tr key={item.id} className="border-b border-slate-100">
+                <tr key={item.id} className="border-b border-slate-100 print:border-slate-200">
                   <td className="py-2">{item.description}</td>
                   <td className="text-center py-2">{item.quantity}</td>
                   <td className="text-right py-2">₱{Number(item.unit_price).toLocaleString()}</td>
@@ -174,7 +175,7 @@ export default function ReceiptPage({ params }: PageProps) {
         </div>
 
         {/* Totals */}
-        <div className="space-y-1.5 py-4 border-t border-slate-200 text-sm">
+        <div className="space-y-1.5 border-t border-slate-200 py-5 text-sm print:border-slate-300">
           <div className="flex justify-between text-slate-600">
             <span>Subtotal</span>
             <span>₱{Number(billing.subtotal).toLocaleString()}</span>
@@ -191,7 +192,7 @@ export default function ReceiptPage({ params }: PageProps) {
               <span>₱{Number(billing.tax).toLocaleString()}</span>
             </div>
           ) : null}
-          <div className="flex justify-between pt-2 border-t border-slate-200 text-base font-bold text-slate-900">
+          <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900 print:border-slate-300">
             <span>Total</span>
             <span>₱{Number(billing.total).toLocaleString()}</span>
           </div>
@@ -199,8 +200,8 @@ export default function ReceiptPage({ params }: PageProps) {
 
         {/* Payments */}
         {paidPayments.length > 0 ? (
-          <div className="py-4 border-t border-slate-200">
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Payments</p>
+          <div className="border-t border-slate-200 py-5 print:border-slate-300">
+            <p className="mb-2 text-xs text-slate-500 uppercase tracking-wider">POS Payment Record</p>
             {paidPayments.map((p) => (
               <div key={p.id} className="flex justify-between text-sm py-1">
                 <span className="text-slate-600">
@@ -209,7 +210,7 @@ export default function ReceiptPage({ params }: PageProps) {
                 <span className="font-medium text-emerald-700">−₱{Number(p.amount).toLocaleString()}</span>
               </div>
             ))}
-            <div className="flex justify-between pt-2 mt-2 border-t border-slate-200 text-sm font-semibold">
+            <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-sm font-semibold print:border-slate-300">
               <span>Balance</span>
               <span className={balance <= 0 ? "text-emerald-700" : "text-amber-700"}>
                 ₱{balance.toLocaleString()}
@@ -218,9 +219,15 @@ export default function ReceiptPage({ params }: PageProps) {
           </div>
         ) : null}
 
-        <p className="pt-4 text-center text-[10px] text-slate-400 print:block">
-          Thank you for choosing CHIARA Clinic. For queries, contact the clinic office.
-        </p>
+        <div className="border-t border-dashed border-slate-200 pt-5 print:border-slate-300">
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
+            <span>Prepared by CHIARA Clinic POS Billing System</span>
+            <span>{new Date().toLocaleDateString()}</span>
+          </div>
+          <p className="pt-4 text-center text-[10px] text-slate-400 print:block">
+            Thank you for choosing CHIARA Clinic. Present this clinic POS billing receipt for verification and records.
+          </p>
+        </div>
       </div>
     </div>
   );

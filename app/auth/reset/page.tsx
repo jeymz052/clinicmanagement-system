@@ -140,11 +140,11 @@ export default function ResetPasswordPage() {
             <Image
               src="/images/chiaralogo.png"
               alt="Chiara Logo"
-              width={280}
-              height={100}
+              width={669}
+              height={373}
               priority
               quality={100}
-              style={{ height: "auto" }}
+              style={{ width: "280px", height: "auto" }}
               className="object-contain drop-shadow-lg -mt-6 -mb-6"
             />
           </div>

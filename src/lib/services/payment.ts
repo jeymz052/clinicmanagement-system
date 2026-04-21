@@ -6,6 +6,7 @@ import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
 
 const MEETING_BASE = process.env.MEETING_BASE_URL ?? "https://meet.chiara.clinic";
+const ONLINE_ALLOWED_METHODS = new Set<PaymentMethod>(["QR", "Card", "BankTransfer"]);
 
 function buildMeetingLink(appt: Appointment) {
   const token = randomUUID().slice(0, 8);
@@ -17,6 +18,10 @@ export async function createPaymentIntent(
   method: PaymentMethod,
   actor: Actor,
 ): Promise<Payment> {
+  if (!ONLINE_ALLOWED_METHODS.has(method)) {
+    throw new HttpError(400, "Online consultations only accept QR, Card, or Bank Transfer.");
+  }
+
   const appt = await getAppointment(appointmentId);
   if (actor.profile.role === "patient" && actor.id !== appt.patient_id)
     throw new HttpError(403, "Forbidden");
@@ -28,6 +33,12 @@ export async function createPaymentIntent(
   const doctor = await getDoctor(appt.doctor_id);
 
   const supabase = getSupabaseAdmin();
+  await supabase
+    .from("payments")
+    .update({ status: "Failed" })
+    .eq("appointment_id", appt.id)
+    .eq("status", "Pending");
+
   const { data, error } = await supabase
     .from("payments")
     .insert({
@@ -35,13 +46,82 @@ export async function createPaymentIntent(
       amount: doctor.consultation_fee_online,
       method,
       status: "Pending",
-      provider: method === "Card" ? "stripe" : "manual",
+      provider: method === "Card" ? "stripe" : method === "QR" ? "qr" : "bank_transfer",
       provider_ref: `intent_${randomUUID()}`,
     })
     .select()
     .single<Payment>();
   if (error) throw error;
   return data;
+}
+
+export async function listOnlinePayments(
+  actor: Actor,
+  appointmentIds?: string[],
+): Promise<Array<Payment & { appointment: Appointment | null }>> {
+  const supabase = getSupabaseAdmin();
+  let appointmentQuery = supabase
+    .from("appointments")
+    .select("*")
+    .eq("appointment_type", "Online");
+
+  if (actor.profile.role === "patient") {
+    appointmentQuery = appointmentQuery.eq("patient_id", actor.id);
+  }
+
+  if (appointmentIds && appointmentIds.length > 0) {
+    appointmentQuery = appointmentQuery.in("id", appointmentIds);
+  }
+
+  const { data: appointments, error: apptError } = await appointmentQuery;
+  if (apptError) throw apptError;
+
+  const onlineAppointments = (appointments ?? []) as Appointment[];
+  const allowedIds = onlineAppointments.map((appointment) => appointment.id);
+  if (allowedIds.length === 0) return [];
+
+  const appointmentById = new Map(onlineAppointments.map((appointment) => [appointment.id, appointment]));
+  const { data: payments, error } = await supabase
+    .from("payments")
+    .select("*")
+    .in("appointment_id", allowedIds)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  return ((payments ?? []) as Payment[]).map((payment) => ({
+    ...payment,
+    appointment: payment.appointment_id ? appointmentById.get(payment.appointment_id) ?? null : null,
+  }));
+}
+
+export async function setPaymentStatusById(
+  paymentId: string,
+  nextStatus: "Paid" | "Failed",
+  actor: Actor,
+): Promise<{ appointment: Appointment | null; payment: Payment }> {
+  const supabase = getSupabaseAdmin();
+  const { data: payment, error } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("id", paymentId)
+    .single<Payment>();
+  if (error || !payment) throw new HttpError(404, "Payment not found");
+
+  if (!payment.appointment_id) {
+    throw new HttpError(400, "This payment is not linked to an online consultation.");
+  }
+
+  const appointment = await getAppointment(payment.appointment_id);
+  if (appointment.appointment_type !== "Online") {
+    throw new HttpError(400, "Only online consultation payments are supported here.");
+  }
+  if (actor.profile.role === "patient" && actor.id !== appointment.patient_id) {
+    throw new HttpError(403, "Forbidden");
+  }
+
+  return nextStatus === "Paid"
+    ? confirmPaymentByRef(payment.provider ?? "manual", payment.provider_ref ?? "")
+    : { payment: await failPaymentByRef(payment.provider ?? "manual", payment.provider_ref ?? ""), appointment };
 }
 
 export async function confirmPaymentByRef(

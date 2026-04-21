@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DashboardHeader } from "./DashboardHeader";
 import { Sidebar } from "./Sidebar";
 import { RoleProvider, useRole } from "./RoleProvider";
 import { canAccessPath } from "@/src/lib/roles";
@@ -20,7 +21,7 @@ export default function Layout({ children }: LayoutProps) {
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { role, user, isLoading, signOut } = useRole();
+  const { role, user, profile, accessToken, isLoading, signOut } = useRole();
   const pathname = usePathname();
   const router = useRouter();
   const hasAccess = canAccessPath(role, pathname);
@@ -61,25 +62,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative min-h-[100svh] bg-slate-50">
-      <Sidebar
-        role={role}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        onLogout={handleLogout}
-      />
+      <Sidebar role={role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <div className="lg:pl-56">
-        {/* Mobile sidebar toggle */}
-        <div className="sticky top-0 z-20 flex items-center px-4 py-2 lg:hidden bg-white border-b border-slate-200">
-          <button
-            type="button"
-            className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm hover:bg-slate-50"
-            onClick={() => setIsSidebarOpen(true)}
-            aria-label="Open sidebar"
-          >
-            ≡
-          </button>
-        </div>
+        <DashboardHeader
+          role={role}
+          profile={profile}
+          accessToken={accessToken}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
+          onLogout={handleLogout}
+        />
 
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">{children}</main>
       </div>

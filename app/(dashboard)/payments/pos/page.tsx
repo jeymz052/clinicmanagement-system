@@ -23,10 +23,17 @@ type Line = {
   unit_price: number;
 };
 
-type PaymentMethod = "Cash" | "Card" | "BankTransfer" | "GCash" | "QR";
+type PaymentMethod = "Cash" | "Card" | "BankTransfer";
+
+const POS_CATEGORIES = ["Consultation", "Lab", "Medicine"] as const;
+type POSCategory = (typeof POS_CATEGORIES)[number];
+
+function isPOSCategory(category: PricingItem["category"]): category is POSCategory {
+  return (POS_CATEGORIES as readonly string[]).includes(category);
+}
 
 function peso(amount: number) {
-  return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `PHP ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function newLine(partial: Partial<Line> = {}): Line {
@@ -38,6 +45,15 @@ function newLine(partial: Partial<Line> = {}): Line {
     unit_price: 0,
     ...partial,
   };
+}
+
+function buildLineFromPricing(item: PricingItem): Line {
+  return newLine({
+    pricing_id: item.id,
+    description: item.name,
+    quantity: 1,
+    unit_price: Number(item.price),
+  });
 }
 
 export default function POSBillingPage() {
@@ -78,24 +94,61 @@ export default function POSBillingPage() {
   );
 
   const selectedAppt = billableAppointments.find((a) => a.id === selectedApptId) ?? null;
+  const posPricing = useMemo(
+    () => pricing.filter((item) => item.is_active && isPOSCategory(item.category)),
+    [pricing],
+  );
 
-  const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0);
+  const catalogByCategory = useMemo(
+    () =>
+      POS_CATEGORIES.map((category) => ({
+        category,
+        items: posPricing
+          .filter((item) => item.category === category)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      })),
+    [posPricing],
+  );
+
+  const validItems = lines.filter((line) => line.pricing_id && line.quantity > 0 && line.unit_price > 0);
+  const subtotal = validItems.reduce((sum, line) => sum + line.quantity * line.unit_price, 0);
   const total = Math.max(0, subtotal - discount + tax);
 
   function updateLine(tempId: string, patch: Partial<Line>) {
-    setLines((current) => current.map((l) => (l.tempId === tempId ? { ...l, ...patch } : l)));
+    setLines((current) => current.map((line) => (line.tempId === tempId ? { ...line, ...patch } : line)));
   }
 
-  function addLine() {
-    setLines((current) => [...current, newLine()]);
+  function addCatalogItem(item: PricingItem) {
+    if (issuedBillingId) return;
+
+    setLines((current) => {
+      const matchingLine = current.find(
+        (line) =>
+          line.pricing_id === item.id &&
+          line.description.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+          Number(line.unit_price) === Number(item.price),
+      );
+
+      if (matchingLine) {
+        return current.map((line) =>
+          line.tempId === matchingLine.tempId ? { ...line, quantity: line.quantity + 1 } : line,
+        );
+      }
+
+      if (current.length === 1 && !current[0].description.trim() && current[0].unit_price === 0) {
+        return [buildLineFromPricing(item)];
+      }
+
+      return [...current, buildLineFromPricing(item)];
+    });
   }
 
   function removeLine(tempId: string) {
-    setLines((current) => (current.length > 1 ? current.filter((l) => l.tempId !== tempId) : current));
+    setLines((current) => (current.length > 1 ? current.filter((line) => line.tempId !== tempId) : current));
   }
 
   function applyPricing(tempId: string, pricingId: string) {
-    const item = pricing.find((p) => p.id === pricingId);
+    const item = posPricing.find((entry) => entry.id === pricingId);
     if (!item) return;
     updateLine(tempId, {
       pricing_id: item.id,
@@ -109,6 +162,7 @@ export default function POSBillingPage() {
     setLines([newLine()]);
     setDiscount(0);
     setTax(0);
+    setPaymentMethod("Cash");
     setIssuedBillingId(null);
     setFeedback(null);
   }
@@ -119,9 +173,8 @@ export default function POSBillingPage() {
       setFeedback({ message: "Pick a completed clinic appointment first.", tone: "error" });
       return;
     }
-    const items = lines.filter((l) => l.description.trim() && l.quantity > 0 && l.unit_price > 0);
-    if (items.length === 0) {
-      setFeedback({ message: "Add at least one valid line item.", tone: "error" });
+    if (validItems.length === 0) {
+      setFeedback({ message: "Add at least one Consultation, Lab, or Medicine service before generating the bill.", tone: "error" });
       return;
     }
 
@@ -136,23 +189,24 @@ export default function POSBillingPage() {
           appointment_id: selectedAppt.id,
           discount,
           tax,
-          items: items.map((l) => ({
-            pricing_id: l.pricing_id,
-            description: l.description,
-            quantity: l.quantity,
-            unit_price: l.unit_price,
+          items: validItems.map((line) => ({
+            pricing_id: line.pricing_id,
+            description: line.description,
+            quantity: line.quantity,
+            unit_price: line.unit_price,
           })),
         }),
       });
 
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
-        setFeedback({ message: body.message ?? "Failed to issue billing", tone: "error" });
+        setFeedback({ message: body.message ?? "Failed to generate clinic billing.", tone: "error" });
         return;
       }
+
       const payload = (await res.json()) as { billing: { id: string } };
       setIssuedBillingId(payload.billing.id);
-      setFeedback({ message: "Billing issued. Record the payment below.", tone: "success" });
+      setFeedback({ message: "Bill generated. You can now accept payment and open the receipt.", tone: "success" });
     });
   }
 
@@ -167,33 +221,47 @@ export default function POSBillingPage() {
         },
         body: JSON.stringify({ method: paymentMethod }),
       });
+
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
-        setFeedback({ message: body.message ?? "Payment failed", tone: "error" });
+        setFeedback({ message: body.message ?? "Payment failed.", tone: "error" });
         return;
       }
-      setFeedback({ message: "Payment recorded. Receipt is ready.", tone: "success" });
+
+      setFeedback({ message: "Payment accepted. Receipt is ready for printing.", tone: "success" });
     });
   }
 
   return (
     <div className="space-y-6">
-      <div className="animate-fade-in-down">
-        <h1 className="text-3xl font-bold text-slate-900">POS Billing</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Issue a bill for a completed clinic consultation and record payment.
-        </p>
-      </div>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.24),transparent_30%),linear-gradient(135deg,#064e3b_0%,#0f766e_48%,#14532d_100%)] p-6 text-white shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Clinic POS / Billing System</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">Front-desk billing for clinic appointments only</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/90">
+              Generate the bill after consultation, add consultation, lab, and medicine services, accept cash,
+              transfer, or card payment, and open the receipt right away.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile label="Applies To" value="Clinic Appointments" />
+            <StatTile label="Payment Modes" value="Cash / Transfer / Card" />
+            <StatTile label="Output" value="Receipt Ready" />
+          </div>
+        </div>
+      </section>
 
       {!canUse ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Read-only — only staff can issue bills.
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Read-only view. Only clinic staff can generate bills and accept POS payments.
         </div>
       ) : null}
 
       {feedback ? (
         <div
-          className={`rounded-xl px-4 py-3 text-sm font-medium animate-fade-in ${
+          className={`rounded-2xl px-4 py-3 text-sm font-medium ${
             feedback.tone === "success"
               ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border border-red-200 bg-red-50 text-red-800"
@@ -203,271 +271,367 @@ export default function POSBillingPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr,0.85fr]">
-        {/* LEFT — form */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-1">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Create Bill</h2>
-
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Select completed clinic appointment</span>
-              <select
-                value={selectedApptId}
-                onChange={(e) => setSelectedApptId(e.target.value)}
-                disabled={!canUse || !!issuedBillingId}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50"
-              >
-                <option value="">{billableAppointments.length === 0 ? "No completed clinic visits yet" : "Select appointment"}</option>
-                {billableAppointments.map((a) => (
-                  <AppointmentOption key={a.id} appt={a} />
-                ))}
-              </select>
-            </label>
-
-            <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                Line Items
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.18fr_0.82fr]">
+        <div className="space-y-6">
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 1</p>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">Select completed clinic consultation</h2>
+                <p className="mt-1 text-sm text-slate-500">Only completed clinic appointments can be billed in this POS screen.</p>
               </div>
-              <div className="divide-y divide-slate-100">
-                {lines.map((line, i) => (
-                  <div
-                    key={line.tempId}
-                    className={`grid grid-cols-12 gap-2 px-4 py-3 items-start animate-fade-in-up stagger-${Math.min(i + 1, 5)}`}
-                  >
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <span className="font-semibold text-slate-900">{billableAppointments.length}</span> billable clinic visit(s)
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Completed clinic appointment</span>
+                <select
+                  value={selectedApptId}
+                  onChange={(event) => setSelectedApptId(event.target.value)}
+                  disabled={!canUse || !!issuedBillingId}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50"
+                >
+                  <option value="">
+                    {billableAppointments.length === 0 ? "No completed clinic visits yet" : "Select appointment"}
+                  </option>
+                  {billableAppointments.map((appt) => (
+                    <AppointmentOption key={appt.id} appt={appt} />
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+                {selectedAppt ? (
+                  <>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Patient</p>
+                    <p className="mt-2 text-lg font-bold text-slate-900">{selectedAppt.patientName}</p>
+                    <p className="mt-1 text-sm text-slate-600">{formatDisplayDate(selectedAppt.date)}</p>
+                    <p className="mt-1 text-sm text-slate-500">{formatRange(selectedAppt.start, selectedAppt.end)}</p>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    Pick an appointment to load the patient and start building the clinic bill.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 2</p>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">Add clinic services</h2>
+                <p className="mt-1 text-sm text-slate-500">This POS is locked to Consultation, Lab, and Medicine catalog items only.</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              {catalogByCategory.map((group) => (
+                <div key={group.category} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-900">{group.category}</p>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                      {group.items.length} item(s)
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {group.items.length > 0 ? (
+                      group.items.slice(0, 6).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => addCatalogItem(item)}
+                          disabled={!canUse || !!issuedBillingId}
+                          className="flex w-full items-center justify-between rounded-2xl border border-white bg-white px-3 py-3 text-left transition hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-400"
+                        >
+                          <span className="min-w-0 pr-3">
+                            <span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span>
+                            <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-slate-400">{item.code}</span>
+                          </span>
+                          <span className="shrink-0 text-sm font-bold text-teal-700">{peso(Number(item.price))}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-400">
+                        No {group.category.toLowerCase()} pricing items yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-slate-200">
+              <div className="grid grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <div className="col-span-12 md:col-span-4">Service</div>
+                <div className="col-span-4 md:col-span-2">Quantity</div>
+                <div className="col-span-4 md:col-span-2">Unit Price</div>
+                <div className="col-span-3 md:col-span-3">Line Total</div>
+                <div className="col-span-1 text-right">Action</div>
+              </div>
+
+              <div className="divide-y divide-slate-100 bg-white">
+                {lines.map((line) => (
+                  <div key={line.tempId} className="grid grid-cols-12 gap-3 px-4 py-4">
                     <div className="col-span-12 md:col-span-4">
                       <select
                         value={line.pricing_id ?? ""}
-                        onChange={(e) => {
-                          if (e.target.value) applyPricing(line.tempId, e.target.value);
+                        onChange={(event) => {
+                          if (event.target.value) applyPricing(line.tempId, event.target.value);
                           else updateLine(line.tempId, { pricing_id: null });
                         }}
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                       >
-                        <option value="">Pick from catalog (or type below)</option>
-                        {pricing.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.category} · {p.name} · {peso(Number(p.price))}
-                          </option>
-                        ))}
+                        <option value="">Pick Consultation, Lab, or Medicine</option>
+                        {posPricing.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.category} - {item.name} - {peso(Number(item.price))}
+                            </option>
+                          ))}
                       </select>
-                      <input
-                        type="text"
-                        placeholder="Or enter description"
-                        value={line.description}
-                        onChange={(e) => updateLine(line.tempId, { description: e.target.value })}
-                        disabled={!canUse || !!issuedBillingId}
-                        className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      />
+                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+                        {line.description || "No service selected"}
+                      </div>
                     </div>
+
                     <div className="col-span-4 md:col-span-2">
-                      <label className="text-[10px] text-slate-500 uppercase">Qty</label>
                       <input
                         type="number"
                         min={1}
                         value={line.quantity}
-                        onChange={(e) => updateLine(line.tempId, { quantity: Math.max(1, Number(e.target.value)) })}
+                        onChange={(event) =>
+                          updateLine(line.tempId, { quantity: Math.max(1, Number(event.target.value) || 1) })
+                        }
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                       />
                     </div>
+
                     <div className="col-span-4 md:col-span-2">
-                      <label className="text-[10px] text-slate-500 uppercase">Unit (₱)</label>
                       <input
                         type="number"
                         min={0}
                         step="0.01"
                         value={line.unit_price}
-                        onChange={(e) => updateLine(line.tempId, { unit_price: Number(e.target.value) })}
+                        onChange={(event) => updateLine(line.tempId, { unit_price: Number(event.target.value) || 0 })}
                         disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-3 text-right">
-                      <label className="text-[10px] text-slate-500 uppercase">Total</label>
-                      <p className="font-semibold text-slate-900 text-sm py-1.5">
-                        {peso(line.quantity * line.unit_price)}
-                      </p>
+
+                    <div className="col-span-3 md:col-span-3 flex items-center text-sm font-semibold text-slate-900">
+                      {peso(line.quantity * line.unit_price)}
                     </div>
-                    <div className="col-span-1 md:col-span-1 pt-5 text-right">
+
+                    <div className="col-span-1 flex items-start justify-end">
                       {lines.length > 1 && !issuedBillingId ? (
                         <button
                           type="button"
                           onClick={() => removeLine(line.tempId)}
-                          className="text-slate-400 hover:text-red-600 transition-colors"
+                          className="rounded-xl border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                           aria-label="Remove line"
                         >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          X
                         </button>
                       ) : null}
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="bg-slate-50 border-t border-slate-200 px-4 py-2">
-                <button
-                  type="button"
-                  onClick={addLine}
-                  disabled={!canUse || !!issuedBillingId}
-                  className="text-xs font-semibold text-teal-700 hover:text-teal-800 disabled:text-slate-400"
-                >
-                  + Add item
-                </button>
-              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Discount (₱)</span>
+                <span className="text-sm font-medium text-slate-700">Discount</span>
                 <input
                   type="number"
                   min={0}
                   step="0.01"
                   value={discount}
-                  onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                  onChange={(event) => setDiscount(Math.max(0, Number(event.target.value) || 0))}
                   disabled={!canUse || !!issuedBillingId}
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </label>
+
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Tax (₱)</span>
+                <span className="text-sm font-medium text-slate-700">Tax</span>
                 <input
                   type="number"
                   min={0}
                   step="0.01"
                   value={tax}
-                  onChange={(e) => setTax(Math.max(0, Number(e.target.value)))}
+                  onChange={(event) => setTax(Math.max(0, Number(event.target.value) || 0))}
                   disabled={!canUse || !!issuedBillingId}
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </label>
             </div>
-          </div>
-
-          <div className="mt-5 flex gap-3">
-            {!issuedBillingId ? (
-              <>
-                <button
-                  type="button"
-                  onClick={issueBill}
-                  disabled={!canUse || isWorking || !selectedApptId}
-                  className="rounded-xl bg-teal-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300 transition-all hover:scale-105 disabled:hover:scale-100"
-                >
-                  {isWorking ? "Issuing..." : "Issue Bill"}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Reset
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Start New Bill
-              </button>
-            )}
-          </div>
+          </section>
         </div>
 
-        {/* RIGHT — summary */}
-        <div className="space-y-5">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-2 sticky top-4">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Summary</h2>
+        <div className="space-y-6">
+          <section className="sticky top-24 overflow-hidden rounded-[2rem] border border-emerald-300 bg-[linear-gradient(180deg,#ecfdf5_0%,#d1fae5_100%)] text-slate-900 shadow-[0_20px_70px_rgba(16,185,129,0.18)]">
+            <div className="border-b border-emerald-200 px-6 py-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">POS Terminal</p>
+              <h2 className="mt-2 text-2xl font-bold">Clinic Billing</h2>
+              <p className="mt-2 text-sm text-slate-600">Review the cart, generate the bill, accept payment, and open the printable receipt.</p>
+            </div>
 
-            {selectedAppt ? (
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mb-4">
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Patient</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">{selectedAppt.patientName}</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {formatDisplayDate(selectedAppt.date)} · {formatRange(selectedAppt.start, selectedAppt.end)}
-                </p>
+            <div className="space-y-5 px-6 py-6">
+              <div className="rounded-[1.5rem] border border-emerald-200 bg-white px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Appointment</p>
+                {selectedAppt ? (
+                  <>
+                    <p className="mt-2 text-lg font-semibold text-slate-900">{selectedAppt.patientName}</p>
+                    <p className="mt-1 text-sm text-slate-600">{formatDisplayDate(selectedAppt.date)}</p>
+                    <p className="mt-1 text-sm text-slate-500">{formatRange(selectedAppt.start, selectedAppt.end)}</p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">No clinic appointment selected yet.</p>
+                )}
               </div>
-            ) : (
-              <p className="text-xs text-slate-400 mb-4 italic">No appointment selected</p>
-            )}
 
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between text-slate-600">
-                <span>Subtotal</span>
-                <span>{peso(subtotal)}</span>
-              </div>
-              {discount > 0 ? (
-                <div className="flex justify-between text-slate-600">
-                  <span>Discount</span>
-                  <span>−{peso(discount)}</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Bill Items</p>
+                  <p className="text-xs text-slate-500">{validItems.length} valid line(s)</p>
                 </div>
-              ) : null}
-              {tax > 0 ? (
-                <div className="flex justify-between text-slate-600">
+
+                <div className="max-h-72 space-y-2 overflow-y-auto rounded-[1.5rem] border border-emerald-200 bg-white p-3">
+                  {validItems.length > 0 ? (
+                    validItems.map((line) => (
+                      <div key={line.tempId} className="rounded-2xl border border-emerald-100 bg-emerald-50/50 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{line.description}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-500">
+                              Qty {line.quantity} x {peso(line.unit_price)}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-sm font-bold text-emerald-700">
+                            {peso(line.quantity * line.unit_price)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-emerald-200 px-3 py-6 text-center text-sm text-slate-500">
+                      Add Consultation, Lab, or Medicine items to build the clinic bill.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-emerald-200 bg-white px-4 py-4">
+                <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Subtotal</span>
+                  <span>{peso(subtotal)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
+                  <span>Discount</span>
+                  <span>- {peso(discount)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
                   <span>Tax</span>
                   <span>{peso(tax)}</span>
                 </div>
-              ) : null}
-              <div className="flex justify-between pt-2 mt-2 border-t border-slate-200 text-base font-bold text-slate-900">
-                <span>Total</span>
-                <span>{peso(total)}</span>
-              </div>
-            </div>
-
-            {issuedBillingId ? (
-              <div className="mt-5 border-t border-slate-200 pt-5 animate-fade-in-up">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Record Payment</p>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card</option>
-                  <option value="GCash">GCash</option>
-                  <option value="QR">QR Payment</option>
-                  <option value="BankTransfer">Bank Transfer</option>
-                </select>
-                <div className="flex flex-col gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={recordPayment}
-                    disabled={isWorking}
-                    className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:bg-emerald-300 transition-all hover:scale-[1.02]"
-                  >
-                    {isWorking ? "Recording..." : `Mark as Paid — ${peso(total)}`}
-                  </button>
-                  <Link
-                    href={`/payments/receipt/${issuedBillingId}`}
-                    className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-center text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    View / Print Receipt →
-                  </Link>
+                <div className="mt-4 flex items-center justify-between border-t border-emerald-100 pt-4">
+                  <span className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-600">Total Due</span>
+                  <span className="text-2xl font-bold text-emerald-700">{peso(total)}</span>
                 </div>
               </div>
-            ) : null}
-          </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-3">
-            <h3 className="text-sm font-bold text-slate-900 mb-3">POS Rules</h3>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li className="flex gap-2">
-                <span className="text-teal-500">•</span>
-                <span>Applies to clinic visits only. Online consultations are paid up front.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-teal-500">•</span>
-                <span>Can only bill appointments with status &quot;Completed&quot;.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-teal-500">•</span>
-                <span>Catalog items come from the Pricing page — add services there first.</span>
-              </li>
-            </ul>
-          </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Step 3 - Accept Payment</p>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { value: "Cash", label: "Cash" },
+                    { value: "BankTransfer", label: "Transfer" },
+                    { value: "Card", label: "Card" },
+                  ].map((method) => (
+                    <button
+                      key={method.value}
+                      type="button"
+                      disabled={!issuedBillingId}
+                      onClick={() => setPaymentMethod(method.value as PaymentMethod)}
+                      className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                        paymentMethod === method.value
+                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          : "border-emerald-200 bg-white text-slate-700"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {!issuedBillingId ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={issueBill}
+                      disabled={!canUse || isWorking || !selectedApptId}
+                      className="w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-600"
+                    >
+                      {isWorking ? "Generating Bill..." : "Generate Bill"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="w-full rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-emerald-50"
+                    >
+                      Clear POS
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={recordPayment}
+                      disabled={isWorking}
+                      className="w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-600"
+                    >
+                      {isWorking ? "Accepting Payment..." : `Accept ${paymentMethod === "BankTransfer" ? "Transfer" : paymentMethod} Payment`}
+                    </button>
+                    <Link
+                      href={`/payments/receipt/${issuedBillingId}`}
+                      className="block w-full rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 transition hover:bg-emerald-50"
+                    >
+                      Open Receipt
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="w-full rounded-2xl border border-emerald-200 bg-transparent px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-emerald-50"
+                    >
+                      Start New Bill
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">POS / Billing Rules</p>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <Rule text="Applies only to clinic appointments." />
+              <Rule text="Generate the bill after the consultation is completed." />
+              <Rule text="Only Consultation, Lab, and Medicine services are allowed in this POS." />
+              <Rule text="Accepted payment modes on this screen are cash, transfer, and card." />
+              <Rule text="Receipt becomes available after the bill is issued." />
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -477,7 +641,25 @@ export default function POSBillingPage() {
 function AppointmentOption({ appt }: { appt: AppointmentRecord }) {
   return (
     <option value={appt.id}>
-      {appt.patientName} · {formatDisplayDate(appt.date)} · {formatRange(appt.start, appt.end)}
+      {appt.patientName} - {formatDisplayDate(appt.date)} - {formatRange(appt.start, appt.end)}
     </option>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">{label}</p>
+      <p className="mt-2 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function Rule({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+      <span className="mt-1 h-2.5 w-2.5 rounded-full bg-teal-500" />
+      <p>{text}</p>
+    </div>
   );
 }

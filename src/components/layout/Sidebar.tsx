@@ -6,24 +6,31 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { IconType } from "react-icons";
 import {
-  FaArrowRightFromBracket,
   FaCalendarCheck,
+  FaCalendarDays,
+  FaCalendarPlus,
   FaChartLine,
   FaChevronRight,
+  FaCircleCheck,
+  FaClock,
+  FaClockRotateLeft,
   FaCircleQuestion,
   FaCreditCard,
+  FaFileLines,
   FaGear,
   FaHouse,
+  FaListUl,
   FaRegMessage,
-  FaRegUser,
   FaStethoscope,
   FaUsers,
+  FaVideo,
 } from "react-icons/fa6";
-import { getRoleProfile, type UserRole } from "@/src/lib/roles";
+import type { UserRole } from "@/src/lib/roles";
 
 type NavSubItem = {
   label: string;
   href: string;
+  icon: IconType;
 };
 
 type NavItem = {
@@ -42,8 +49,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/patients",
       icon: FaUsers,
       subItems: [
-        { label: "All Patients", href: "/patients" },
-        { label: "Patient Records", href: "/patients/records" },
+        { label: "All Patients", href: "/patients", icon: FaUsers },
+        { label: "Patient Records", href: "/patients/records", icon: FaFileLines },
       ],
     },
     {
@@ -51,9 +58,9 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
-        { label: "Book Appointment", href: "/appointments" },
-        { label: "Appointment List", href: "/appointments/list" },
-        { label: "Calendar View", href: "/appointments/calendar" },
+        { label: "Book Appointment", href: "/appointments", icon: FaCalendarPlus },
+        { label: "Appointment List", href: "/appointments/list", icon: FaListUl },
+        { label: "Calendar View", href: "/appointments/calendar", icon: FaCalendarDays },
       ],
     },
     {
@@ -61,9 +68,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
-        { label: "Online Payment", href: "/payments" },
-        { label: "POS Billing", href: "/payments/pos" },
-        { label: "Invoices", href: "/payments/invoices" },
+        { label: "Online Payment", href: "/payments", icon: FaCreditCard },
+        { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
       ],
     },
     {
@@ -71,8 +77,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/consultations",
       icon: FaRegMessage,
       subItems: [
-        { label: "Online Consultation", href: "/consultations" },
-        { label: "Consultation History", href: "/consultations/history" },
+        { label: "Online Consultation", href: "/consultations", icon: FaVideo },
+        { label: "Consultation History", href: "/consultations/history", icon: FaClockRotateLeft },
       ],
     },
     {
@@ -80,8 +86,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/schedules",
       icon: FaStethoscope,
       subItems: [
-        { label: "Doctor Schedules", href: "/schedules" },
-        { label: "Time Slots", href: "/schedules/slots" },
+        { label: "Doctor Schedules", href: "/schedules", icon: FaStethoscope },
+        { label: "Time Slots", href: "/schedules/slots", icon: FaClock },
       ],
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
@@ -96,8 +102,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/patients",
       icon: FaUsers,
       subItems: [
-        { label: "All Patients", href: "/patients" },
-        { label: "Patient Records", href: "/patients/records" },
+        { label: "All Patients", href: "/patients", icon: FaUsers },
+        { label: "Patient Records", href: "/patients/records", icon: FaFileLines },
       ],
     },
     {
@@ -105,9 +111,9 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
-        { label: "Book Appointment", href: "/appointments" },
-        { label: "Appointment List", href: "/appointments/list" },
-        { label: "Calendar View", href: "/appointments/calendar" },
+        { label: "Book Appointment", href: "/appointments", icon: FaCalendarPlus },
+        { label: "Appointment List", href: "/appointments/list", icon: FaListUl },
+        { label: "Calendar View", href: "/appointments/calendar", icon: FaCalendarDays },
       ],
     },
     {
@@ -115,9 +121,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
-        { label: "Online Payment", href: "/payments" },
-        { label: "POS Billing", href: "/payments/pos" },
-        { label: "Invoices", href: "/payments/invoices" },
+        { label: "Online Payment", href: "/payments", icon: FaCreditCard },
+        { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
       ],
     },
     {
@@ -125,8 +130,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/schedules",
       icon: FaStethoscope,
       subItems: [
-        { label: "Doctor Schedules", href: "/schedules" },
-        { label: "Time Slots", href: "/schedules/slots" },
+        { label: "Doctor Schedules", href: "/schedules", icon: FaStethoscope },
+        { label: "Time Slots", href: "/schedules/slots", icon: FaClock },
       ],
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
@@ -140,9 +145,9 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
-        { label: "Manage Appointments", href: "/appointments" },
-        { label: "Appointment List", href: "/appointments/list" },
-        { label: "Calendar View", href: "/appointments/calendar" },
+        { label: "Manage Appointments", href: "/appointments", icon: FaCalendarCheck },
+        { label: "Appointment List", href: "/appointments/list", icon: FaListUl },
+        { label: "Calendar View", href: "/appointments/calendar", icon: FaCalendarDays },
       ],
     },
     {
@@ -150,8 +155,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/patients",
       icon: FaUsers,
       subItems: [
-        { label: "My Patients", href: "/patients" },
-        { label: "Patient Records", href: "/patients/records" },
+        { label: "My Patients", href: "/patients", icon: FaUsers },
+        { label: "Patient Records", href: "/patients/records", icon: FaFileLines },
       ],
     },
     {
@@ -159,8 +164,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/consultations",
       icon: FaRegMessage,
       subItems: [
-        { label: "Start Online Consultation", href: "/consultations" },
-        { label: "Consultation History", href: "/consultations/history" },
+        { label: "Start Online Consultation", href: "/consultations", icon: FaVideo },
+        { label: "Consultation History", href: "/consultations/history", icon: FaClockRotateLeft },
       ],
     },
     {
@@ -168,8 +173,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/schedules",
       icon: FaStethoscope,
       subItems: [
-        { label: "My Schedule", href: "/schedules" },
-        { label: "Unavailable Dates", href: "/schedules/slots" },
+        { label: "My Schedule", href: "/schedules", icon: FaStethoscope },
+        { label: "Unavailable Dates", href: "/schedules/slots", icon: FaClock },
       ],
     },
     {
@@ -177,8 +182,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/payments",
       icon: FaCreditCard,
       subItems: [
-        { label: "Online Payment", href: "/payments" },
-        { label: "POS Billing", href: "/payments/pos" },
+        { label: "Online Payment", href: "/payments", icon: FaCreditCard },
+        { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
       ],
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
@@ -192,9 +197,9 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/appointments",
       icon: FaCalendarCheck,
       subItems: [
-        { label: "Book Appointment", href: "/appointments" },
-        { label: "My Appointments", href: "/appointments/my" },
-        { label: "Calendar View", href: "/appointments/calendar" },
+        { label: "Book Appointment", href: "/appointments", icon: FaCalendarPlus },
+        { label: "My Appointments", href: "/appointments/my", icon: FaCalendarCheck },
+        { label: "Calendar View", href: "/appointments/calendar", icon: FaCalendarDays },
       ],
     },
     {
@@ -202,23 +207,21 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       href: "/consultations",
       icon: FaRegMessage,
       subItems: [
-        { label: "Online Consultation", href: "/consultations" },
-        { label: "Consultation History", href: "/consultations/history" },
+        { label: "Online Consultation", href: "/consultations", icon: FaVideo },
+        { label: "Consultation History", href: "/consultations/history", icon: FaClockRotateLeft },
       ],
     },
     {
       label: "Payments",
       href: "/payments",
       icon: FaCreditCard,
-      subItems: [
-        { label: "Pay Online", href: "/payments" },
-      ],
+      subItems: [{ label: "Pay Online", href: "/payments", icon: FaCreditCard }],
     },
     {
       label: "Patients",
       href: "/patients",
       icon: FaUsers,
-      subItems: [{ label: "My Records", href: "/patients/records" }],
+      subItems: [{ label: "My Records", href: "/patients/records", icon: FaFileLines }],
     },
   ],
 };
@@ -227,18 +230,22 @@ type SidebarProps = {
   role: UserRole;
   isOpen: boolean;
   onClose: () => void;
-  onLogout: () => void;
 };
 
 type ExpandedMenus = Record<string, boolean>;
 
-export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
+export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   const navItems = NAV_BY_ROLE[role];
   const pathname = usePathname();
+  const todayLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
   const [expanded, setExpanded] = useState<ExpandedMenus>(
-    Object.fromEntries(navItems.map((item) => [item.label, true])),
+    Object.fromEntries(navItems.map((item) => [item.label, false])),
   );
-  const profile = getRoleProfile(role);
 
   const toggleExpand = (label: string) => {
     setExpanded((prev) => ({
@@ -264,30 +271,33 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="shrink-0 border-b border-slate-200 px-4 py-2 bg-white">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2">
           <div className="flex items-center justify-between">
             <Image
               src="/images/chiaralogo.png"
               alt="Chiara Logo"
-              width={180}
-              height={64}
+              width={669}
+              height={373}
               priority
               quality={100}
-              style={{ height: "auto" }}
+              style={{ width: "180px", height: "auto" }}
               className="object-contain -my-2"
             />
             <button
-              className="rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+              className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden"
               onClick={onClose}
               type="button"
               aria-label="Close sidebar"
             >
-              ×
+              x
             </button>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <nav
+          className="flex-1 overflow-y-auto px-3 py-3 scrollbar-hide"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
           <div className="flex flex-col gap-2.5">
             {navItems.map((item) => {
               const itemActive = isActive(item.href);
@@ -336,48 +346,58 @@ export function Sidebar({ role, isOpen, onClose, onLogout }: SidebarProps) {
 
                   {item.subItems && expanded[item.label] ? (
                     <div className="ml-6 mt-1 space-y-1 border-l border-slate-200 pl-2">
-                      {item.subItems.map((subItem) => (
-                        <Link
-                          key={subItem.label}
-                          href={subItem.href}
-                          className={`block rounded-md px-2 py-1 text-[13px] font-medium leading-4 transition ${
-                            isActive(subItem.href)
-                              ? "bg-teal-600 text-white"
-                              : "text-slate-500 hover:bg-slate-100 hover:text-teal-700"
-                          }`}
-                        >
-                          {subItem.label}
-                        </Link>
-                      ))}
+                      {item.subItems.map((subItem) => {
+                        const subItemActive = isActive(subItem.href);
+
+                        return (
+                          <Link
+                            key={subItem.label}
+                            href={subItem.href}
+                            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium leading-4 transition ${
+                              subItemActive
+                                ? "bg-teal-50 text-teal-700"
+                                : "text-slate-500 hover:bg-slate-100 hover:text-teal-700"
+                            }`}
+                          >
+                            <subItem.icon
+                              className={`h-3.5 w-3.5 shrink-0 ${
+                                subItemActive ? "text-teal-600" : "text-slate-400"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">{subItem.label}</span>
+                          </Link>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
               );
             })}
-
-            <button
-              type="button"
-              className="group flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-100"
-              onClick={onLogout}
-            >
-              <FaArrowRightFromBracket className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-teal-600" />
-              <span className="text-[15px] font-medium leading-4 text-slate-700 group-hover:text-teal-700">
-                Logout
-              </span>
-            </button>
           </div>
         </nav>
 
-        <div className="shrink-0 border-t border-slate-200 px-4 py-3 bg-white">
-          <Link
-            href="/settings"
-            className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-slate-100"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700">
-              <FaRegUser className="h-4 w-4" aria-hidden="true" />
+        <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-3">
+          <div className="rounded-2xl border border-emerald-800/80 bg-gradient-to-b from-emerald-900 via-emerald-800 to-emerald-950 px-3 py-3 text-white shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-100/80">
+                Clinic Status
+              </span>
+              <FaCircleCheck className="h-4 w-4 text-emerald-300" aria-hidden="true" />
             </div>
-            <p className="text-[15px] font-semibold text-teal-700">{profile.label}</p>
-          </Link>
+
+            <div className="mt-2 text-center">
+              <p className="text-xl font-semibold leading-none text-white">Open Today</p>
+            </div>
+
+            <div className="mt-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2">
+              <div className="flex items-center justify-center gap-2 text-emerald-50">
+                <FaClock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="text-xs font-semibold">8:00 AM - 5:00 PM</span>
+              </div>
+              <p className="mt-1 text-center text-[10px] text-emerald-100/75">{todayLabel}</p>
+            </div>
+          </div>
         </div>
       </aside>
     </>

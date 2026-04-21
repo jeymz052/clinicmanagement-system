@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
 
 type PricingCategory = "Consultation" | "Lab" | "Medicine" | "Procedure" | "Other";
@@ -12,6 +12,17 @@ type PricingItem = {
   category: PricingCategory;
   price: number;
   is_active: boolean;
+};
+
+type DoctorRate = {
+  id: string;
+  specialty: string;
+  license_no: string;
+  consultation_fee_clinic: number;
+  consultation_fee_online: number;
+  profiles?: {
+    full_name?: string;
+  }[];
 };
 
 type Draft = {
@@ -30,33 +41,58 @@ const EMPTY_DRAFT: Draft = {
 
 const CATEGORIES: PricingCategory[] = ["Consultation", "Lab", "Medicine", "Procedure", "Other"];
 
+function peso(value: number) {
+  return `₱${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function PricingPage() {
   const { accessToken, role, isLoading: authLoading } = useRole();
   const [items, setItems] = useState<PricingItem[]>([]);
+  const [rates, setRates] = useState<DoctorRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newDraft, setNewDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [rateDraft, setRateDraft] = useState<{ clinic: number; online: number }>({ clinic: 0, online: 0 });
   const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [isSaving, startTransition] = useTransition();
 
-  const canEdit = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
+  const canEdit = role === "SUPER_ADMIN";
+  const primaryDoctor = rates[0] ?? null;
 
   useEffect(() => {
     if (authLoading || !accessToken) return;
     let active = true;
+
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/v2/pricing?active=false", {
-          cache: "no-store",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!res.ok) throw new Error("Failed to load pricing");
-        const payload = (await res.json()) as { pricing: PricingItem[] };
+        const [pricingRes, doctorsRes] = await Promise.all([
+          fetch("/api/v2/pricing?active=false", {
+            cache: "no-store",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          fetch("/api/v2/doctors", {
+            cache: "no-store",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+        ]);
+
+        if (!pricingRes.ok) throw new Error("Failed to load pricing");
+        if (!doctorsRes.ok) throw new Error("Failed to load consultation fees");
+
+        const pricingPayload = (await pricingRes.json()) as { pricing: PricingItem[] };
+        const doctorsPayload = (await doctorsRes.json()) as { doctors: DoctorRate[] };
+
         if (active) {
-          setItems(payload.pricing);
+          setItems(pricingPayload.pricing);
+          setRates(doctorsPayload.doctors);
+          const firstDoctor = doctorsPayload.doctors[0] ?? null;
+          setRateDraft({
+            clinic: Number(firstDoctor?.consultation_fee_clinic ?? 0),
+            online: Number(firstDoctor?.consultation_fee_online ?? 0),
+          });
           setError(null);
         }
       } catch (e) {
@@ -65,10 +101,22 @@ export default function PricingPage() {
         if (active) setLoading(false);
       }
     })();
+
     return () => {
       active = false;
     };
   }, [accessToken, authLoading]);
+
+  const groupedByCategory = useMemo(
+    () =>
+      CATEGORIES.map((category) => ({
+        category,
+        items: items.filter((item) => item.category === category),
+      })).filter((group) => group.items.length > 0),
+    [items],
+  );
+
+  const consultationItems = items.filter((item) => item.category === "Consultation");
 
   function resetFeedback() {
     setTimeout(() => setFeedback(null), 3500);
@@ -120,7 +168,7 @@ export default function PricingPage() {
         return;
       }
       const { pricing } = (await res.json()) as { pricing: PricingItem };
-      setItems((current) => current.map((it) => (it.id === pricing.id ? pricing : it)));
+      setItems((current) => current.map((item) => (item.id === pricing.id ? pricing : item)));
       setEditingId(null);
       setFeedback({ message: "Pricing item updated.", tone: "success" });
       resetFeedback();
@@ -139,23 +187,47 @@ export default function PricingPage() {
         resetFeedback();
         return;
       }
-      setItems((current) => current.map((it) => (it.id === id ? { ...it, is_active: false } : it)));
+      setItems((current) => current.map((item) => (item.id === id ? { ...item, is_active: false } : item)));
       setFeedback({ message: "Item deactivated.", tone: "success" });
       resetFeedback();
     });
   }
 
-  const groupedByCategory = CATEGORIES.map((cat) => ({
-    category: cat,
-    items: items.filter((i) => i.category === cat),
-  })).filter((g) => g.items.length > 0);
+  function saveConsultationRates() {
+    if (!accessToken || !primaryDoctor) return;
+    startTransition(async () => {
+      const res = await fetch(`/api/v2/doctors/${primaryDoctor.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          consultation_fee_clinic: rateDraft.clinic,
+          consultation_fee_online: rateDraft.online,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        setFeedback({ message: body.message ?? "Failed to update consultation rates.", tone: "error" });
+        resetFeedback();
+        return;
+      }
+
+      const { doctor } = (await res.json()) as { doctor: DoctorRate };
+      setRates((current) => current.map((item) => (item.id === doctor.id ? { ...item, ...doctor } : item)));
+      setFeedback({ message: "Consultation fees updated.", tone: "success" });
+      resetFeedback();
+    });
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Pricing</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage consultation, lab, medicine, and procedure rates.</p>
-      </div>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.16),transparent_30%),linear-gradient(135deg,#ecfdf5_0%,#ffffff_70%)] p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Pricing Management</p>
+        <h1 className="mt-3 text-3xl font-bold text-slate-900">Consultation rates and service pricing</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          Manage the dedicated online consultation rate, clinic consultation fee, and the rest of your service catalog from one place.
+        </p>
+      </section>
 
       {feedback ? (
         <div
@@ -173,9 +245,121 @@ export default function PricingPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       ) : null}
 
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Dedicated Rates</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-900">Consultation fees</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                These are the actual fees used by the booking and online payment flow.
+              </p>
+            </div>
+            {!canEdit ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">View only</span>
+            ) : null}
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <RateCard
+              label="Online Consultation Rate"
+              value={peso(primaryDoctor?.consultation_fee_online ?? 0)}
+              note="Used for online consultation payments."
+              accent="emerald"
+            />
+            <RateCard
+              label="Clinic Consultation Fee"
+              value={peso(primaryDoctor?.consultation_fee_clinic ?? 0)}
+              note="Used as the clinic consultation base fee."
+              accent="teal"
+            />
+          </div>
+
+          {primaryDoctor ? (
+            <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Doctor Rate Source</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {primaryDoctor.profiles?.[0]?.full_name ?? "Assigned doctor"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">{primaryDoctor.specialty}</p>
+            </div>
+          ) : null}
+
+          {canEdit && primaryDoctor ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Online consultation rate
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={rateDraft.online}
+                  onChange={(event) => setRateDraft((current) => ({ ...current, online: Number(event.target.value) || 0 }))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Clinic consultation fee
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={rateDraft.clinic}
+                  onChange={(event) => setRateDraft((current) => ({ ...current, clinic: Number(event.target.value) || 0 }))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+
+              <div className="md:col-span-2">
+                <button
+                  type="button"
+                  onClick={saveConsultationRates}
+                  disabled={isSaving}
+                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-200 disabled:text-emerald-700"
+                >
+                  {isSaving ? "Saving rates..." : "Save Consultation Fees"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Consultation Catalog</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-900">Consultation pricing items</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Keep consultation-specific pricing visible alongside the doctor fee cards above.
+          </p>
+
+          <div className="mt-6 space-y-3">
+            {consultationItems.length > 0 ? (
+              consultationItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded-[1.25rem] border border-slate-200 px-4 py-4">
+                  <div>
+                    <p className="font-semibold text-slate-900">{item.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.code}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-emerald-700">{peso(item.price)}</p>
+                    <p className={`mt-1 text-xs ${item.is_active ? "text-emerald-600" : "text-slate-400"}`}>
+                      {item.is_active ? "Active" : "Inactive"}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.25rem] border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
+                No consultation pricing items yet.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
       {canEdit ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-slate-900 mb-4">Add New Item</h2>
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-bold text-slate-900 mb-4">Add New Service Pricing</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
             <input
               placeholder="Code (e.g. CONS-STD)"
@@ -194,15 +378,15 @@ export default function PricingPage() {
               onChange={(e) => setNewDraft((d) => ({ ...d, category: e.target.value as PricingCategory }))}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
             >
-              {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+              {CATEGORIES.map((category) => (
+                <option key={category}>{category}</option>
               ))}
             </select>
             <input
               type="number"
               placeholder="Price (PHP)"
               value={newDraft.price}
-              onChange={(e) => setNewDraft((d) => ({ ...d, price: Number(e.target.value) }))}
+              onChange={(e) => setNewDraft((d) => ({ ...d, price: Number(e.target.value) || 0 }))}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
               min={0}
               step="0.01"
@@ -218,7 +402,7 @@ export default function PricingPage() {
               {isSaving ? "Saving..." : "Add Item"}
             </button>
           </div>
-        </div>
+        </section>
       ) : null}
 
       {loading ? (
@@ -228,7 +412,7 @@ export default function PricingPage() {
           <p className="text-sm text-slate-500">No pricing items yet. Add your first one above.</p>
         </div>
       ) : (
-        groupedByCategory.map(({ category, items: catItems }) => (
+        groupedByCategory.map(({ category, items: categoryItems }) => (
           <div key={category} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="bg-slate-50 border-b border-slate-200 px-5 py-3">
               <h3 className="text-sm font-bold text-slate-900">{category}</h3>
@@ -244,7 +428,7 @@ export default function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {catItems.map((item) => {
+                {categoryItems.map((item) => {
                   const editing = editingId === item.id;
                   return (
                     <tr key={item.id} className="border-t border-slate-100">
@@ -275,18 +459,18 @@ export default function PricingPage() {
                           <input
                             type="number"
                             value={editDraft.price}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, price: Number(e.target.value) }))}
+                            onChange={(e) => setEditDraft((d) => ({ ...d, price: Number(e.target.value) || 0 }))}
                             className="rounded border border-slate-200 px-2 py-1 text-sm w-24 text-right"
                             min={0}
                             step="0.01"
                           />
                         ) : (
-                          `₱${Number(item.price).toLocaleString()}`
+                          peso(item.price)
                         )}
                       </td>
                       <td className="px-5 py-3">
                         <span
-                          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                             item.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
                           }`}
                         >
@@ -345,6 +529,28 @@ export default function PricingPage() {
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+function RateCard({
+  label,
+  value,
+  note,
+  accent,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  accent: "emerald" | "teal";
+}) {
+  const accentStyles = accent === "emerald" ? "text-emerald-700 bg-emerald-50" : "text-teal-700 bg-teal-50";
+
+  return (
+    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      <p className={`mt-3 inline-flex rounded-full px-3 py-1 text-lg font-bold ${accentStyles}`}>{value}</p>
+      <p className="mt-3 text-sm text-slate-500">{note}</p>
     </div>
   );
 }

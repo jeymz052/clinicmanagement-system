@@ -1,358 +1,431 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { markAppointmentPaidAction } from "@/app/(dashboard)/appointments/actions";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorFees } from "@/src/components/clinic/useDoctorFees";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import { formatDisplayDate, formatRange, getDoctorById } from "@/src/lib/appointments";
 
+type OnlinePaymentMethod = "QR" | "Card" | "BankTransfer";
+
+type OnlinePaymentRecord = {
+  id: string;
+  appointment_id: string | null;
+  amount: number;
+  method: OnlinePaymentMethod;
+  status: "Pending" | "Paid" | "Failed";
+  provider: string | null;
+  provider_ref: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
 function peso(amount: number) {
   return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-type PaymentMethod = "Card" | "Bank" | "Wallet";
-
-type PaymentForm = {
-  appointmentId: string;
-  amount: string;
-  method: PaymentMethod;
-  cardNumber: string;
-  expiryDate: string;
-  cvv: string;
-  fullName: string;
-};
-
-const DEFAULT_FORM: PaymentForm = {
-  appointmentId: "",
-  amount: "",
-  method: "Card",
-  cardNumber: "",
-  expiryDate: "",
-  cvv: "",
-  fullName: "",
-};
-
 export default function OnlinePaymentPage() {
   const { accessToken } = useRole();
-  const { appointments, setAppointments, isLoading, error } = useAppointments();
+  const { appointments, isLoading, error } = useAppointments();
   const { fees } = useDoctorFees();
-  const [paymentData, setPaymentData] = useState<PaymentForm>(DEFAULT_FORM);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [isSubmitting, startSubmitTransition] = useTransition();
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
+  const [selectedMethod, setSelectedMethod] = useState<OnlinePaymentMethod>("QR");
+  const [payments, setPayments] = useState<OnlinePaymentRecord[]>([]);
+  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [isSubmitting, startTransition] = useTransition();
 
-  const onlineAppointments = appointments.filter((appointment) => appointment.type === "Online");
-  const pendingAppointments = onlineAppointments.filter(
-    (appointment) => appointment.status === "Pending Payment",
+  const onlineAppointments = useMemo(
+    () => appointments.filter((appointment) => appointment.type === "Online"),
+    [appointments],
   );
-  const paidTodayAmount =
-    onlineAppointments.filter((a) => a.status === "Paid").length * fees.online;
-  const pendingAmount = pendingAppointments.length * fees.online;
-  const selectedAppointment =
-    pendingAppointments.find((appointment) => appointment.id === paymentData.appointmentId) ?? null;
+  const pendingAppointments = useMemo(
+    () => onlineAppointments.filter((appointment) => appointment.status === "Pending Payment"),
+    [onlineAppointments],
+  );
 
-  function updateField<K extends keyof PaymentForm>(field: K, value: PaymentForm[K]) {
-    setPaymentData((current) => ({ ...current, [field]: value }));
-    setFeedback(null);
-  }
-
-  function handleAppointmentSelection(appointmentId: string) {
-    const appointment =
-      pendingAppointments.find((candidate) => candidate.id === appointmentId) ?? null;
-
-    setPaymentData((current) => ({
-      ...current,
-      appointmentId,
-      amount: appointment ? fees.online.toFixed(2) : "",
-    }));
-    setFeedback(null);
-  }
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedAppointment) {
-      setFeedback("Select a pending online consultation first.");
-      return;
-    }
-
-    if (!accessToken) {
-      setFeedback("Your session expired. Please sign in again.");
-      return;
-    }
-
-    startSubmitTransition(async () => {
-      const result = await markAppointmentPaidAction(accessToken, selectedAppointment.id);
-      setAppointments(result.appointments);
-      setFeedback(result.message);
-
-      if (result.ok) {
-        setPaymentData(DEFAULT_FORM);
+  const latestPaymentByAppointment = useMemo(() => {
+    const map = new Map<string, OnlinePaymentRecord>();
+    for (const payment of payments) {
+      if (!payment.appointment_id) continue;
+      if (!map.has(payment.appointment_id)) {
+        map.set(payment.appointment_id, payment);
       }
+    }
+    return map;
+  }, [payments]);
+
+  const selectedAppointment =
+    pendingAppointments.find((appointment) => appointment.id === selectedAppointmentId) ?? null;
+  const selectedPayment = selectedAppointment ? latestPaymentByAppointment.get(selectedAppointment.id) ?? null : null;
+  const paidCount = payments.filter((payment) => payment.status === "Paid").length;
+  const pendingCount = payments.filter((payment) => payment.status === "Pending").length;
+  const failedCount = payments.filter((payment) => payment.status === "Failed").length;
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let active = true;
+
+    async function loadPayments() {
+      const url = new URL("/api/v2/payments", window.location.origin);
+      onlineAppointments.forEach((appointment) => {
+        url.searchParams.append("appointment_id", appointment.id);
+      });
+
+      const res = await fetch(url.toString(), {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return;
+
+      const payload = (await res.json()) as { payments: OnlinePaymentRecord[] };
+      if (active) {
+        setPayments(payload.payments);
+      }
+    }
+
+    void loadPayments();
+    return () => {
+      active = false;
+    };
+  }, [accessToken, onlineAppointments]);
+
+  async function refreshPayments() {
+    if (!accessToken) return;
+    const url = new URL("/api/v2/payments", window.location.origin);
+    onlineAppointments.forEach((appointment) => {
+      url.searchParams.append("appointment_id", appointment.id);
+    });
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return;
+    const payload = (await res.json()) as { payments: OnlinePaymentRecord[] };
+    setPayments(payload.payments);
+  }
+
+  function handleStartPayment() {
+    if (!selectedAppointment) {
+      setFeedback({ message: "Select a pending online consultation first.", tone: "error" });
+      return;
+    }
+    if (!accessToken) {
+      setFeedback({ message: "Your session expired. Please sign in again.", tone: "error" });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        if (selectedMethod === "Card") {
+          const checkoutRes = await fetch("/api/v2/payments/checkout", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ appointment_id: selectedAppointment.id }),
+          });
+
+          if (checkoutRes.ok) {
+            const payload = (await checkoutRes.json()) as { url?: string };
+            if (payload.url) {
+              window.location.href = payload.url;
+              return;
+            }
+          }
+        }
+
+        const intentRes = await fetch("/api/v2/payments/intent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            appointment_id: selectedAppointment.id,
+            method: selectedMethod,
+          }),
+        });
+
+        const payload = (await intentRes.json().catch(() => ({}))) as { payment?: OnlinePaymentRecord; message?: string };
+        if (!intentRes.ok) {
+          setFeedback({ message: payload.message ?? "Failed to create payment request.", tone: "error" });
+          return;
+        }
+
+        await refreshPayments();
+        setFeedback({
+          message:
+            selectedMethod === "Card"
+              ? "Card payment request created. Appointment remains unconfirmed until payment is marked paid."
+              : selectedMethod === "QR"
+                ? "QR payment request created. Appointment remains unconfirmed until payment is marked paid."
+                : "Bank transfer request created. Appointment remains unconfirmed until payment is marked paid.",
+          tone: "success",
+        });
+      } catch (e) {
+        setFeedback({ message: e instanceof Error ? e.message : "Payment request failed.", tone: "error" });
+      }
+    });
+  }
+
+  function updateSelectedPaymentStatus(nextStatus: "Paid" | "Failed") {
+    if (!selectedPayment || !accessToken) return;
+    startTransition(async () => {
+      const res = await fetch("/api/v2/payments", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ payment_id: selectedPayment.id, status: nextStatus }),
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        setFeedback({ message: payload.message ?? `Failed to mark payment ${nextStatus.toLowerCase()}.`, tone: "error" });
+        return;
+      }
+
+      await refreshPayments();
+      setFeedback({
+        message:
+          nextStatus === "Paid"
+            ? "Payment marked paid. The online consultation is now confirmed."
+            : "Payment marked failed. The appointment stays unconfirmed until a paid payment exists.",
+        tone: "success",
+      });
     });
   }
 
   return (
     <div className="space-y-6">
-      <div className="animate-fade-in-down">
-        <h1 className="text-3xl font-bold text-slate-900">Online Payment</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Process online consultation payments. Payment confirmation automatically generates the
-          meeting link.
-        </p>
-      </div>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.2),transparent_32%),linear-gradient(135deg,#064e3b_0%,#0f766e_46%,#14532d_100%)] p-6 text-white shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Payment System</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">Online consultation payments only</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/90">
+              Payment applies only to online consultations. If not paid, the appointment is not confirmed and the meeting link stays unavailable.
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="animate-fade-in-up stagger-1">
-          <PaymentMetric
-            label="Pending Online Payments"
-            value={peso(pendingAmount)}
-            note={`${pendingAppointments.length} appointment${pendingAppointments.length === 1 ? "" : "s"} awaiting payment`}
-            tone="red"
-          />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <HeroMetric label="Pending" value={String(pendingCount)} />
+            <HeroMetric label="Paid" value={String(paidCount)} />
+            <HeroMetric label="Failed" value={String(failedCount)} />
+          </div>
         </div>
-        <div className="animate-fade-in-up stagger-2">
-          <PaymentMetric
-            label="Paid Online Consultations"
-            value={peso(paidTodayAmount)}
-            note={`${onlineAppointments.filter((a) => a.status === "Paid").length} payment-confirmed consults`}
-            tone="emerald"
-          />
-        </div>
-        <div className="animate-fade-in-up stagger-3">
-          <PaymentMetric
-            label="Meeting Links Ready"
-            value={onlineAppointments.filter((appointment) => appointment.meetingLink).length.toString()}
-            note="Auto-generated after payment"
-            tone="slate"
-          />
-        </div>
+      </section>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Rule: if payment is not marked <span className="font-semibold">Paid</span>, the online consultation stays <span className="font-semibold">not confirmed</span>.
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       ) : null}
 
       {feedback ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          {feedback}
+        <div
+          className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+            feedback.tone === "success"
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {feedback.message}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover-lift animate-fade-in-up stagger-4">
-          <h2 className="text-lg font-bold text-slate-900">Payment Form</h2>
-          <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Online Payment Flow</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-900">Create and process payment</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Supported online options: QR payment, card payment, and optional bank transfer.
+          </p>
+
+          <div className="mt-6">
             <label className="block text-sm font-medium text-slate-700">
-              Pending Online Consultation
+              Pending online consultation
               <select
-                value={paymentData.appointmentId}
-                onChange={(event) => handleAppointmentSelection(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
+                value={selectedAppointmentId}
+                onChange={(event) => setSelectedAppointmentId(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Select appointment</option>
                 {pendingAppointments.map((appointment) => {
                   const doctor = getDoctorById(appointment.doctorId);
-
                   return (
                     <option key={appointment.id} value={appointment.id}>
-                      {appointment.patientName} - {doctor?.name} - {formatDisplayDate(
-                        appointment.date,
-                      )} {formatRange(appointment.start, appointment.end)}
+                      {appointment.patientName} - {doctor?.name} - {formatDisplayDate(appointment.date)} {formatRange(appointment.start, appointment.end)}
                     </option>
                   );
                 })}
               </select>
             </label>
+          </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Field label="Amount (₱)">
-                <input
-                  type="number"
-                  value={paymentData.amount}
-                  onChange={(event) => updateField("amount", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                  placeholder={fees.online.toFixed(2)}
-                  required
-                />
-              </Field>
-              <Field label="Payment Method">
-                <select
-                  value={paymentData.method}
-                  onChange={(event) => updateField("method", event.target.value as PaymentMethod)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                >
-                  <option value="Card">Credit/Debit Card</option>
-                  <option value="Bank">Bank Transfer</option>
-                  <option value="Wallet">Digital Wallet</option>
-                </select>
-              </Field>
-            </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            {[
+              {
+                value: "QR",
+                title: "QR Payment",
+                note: "GCash / local equivalent",
+              },
+              {
+                value: "Card",
+                title: "Card Payment",
+                note: "Stripe / card checkout",
+              },
+              {
+                value: "BankTransfer",
+                title: "Bank Transfer",
+                note: "Optional / manual",
+              },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSelectedMethod(option.value as OnlinePaymentMethod)}
+                className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${
+                  selectedMethod === option.value
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"
+                }`}
+              >
+                <p className="text-sm font-bold text-slate-900">{option.title}</p>
+                <p className="mt-1 text-xs text-slate-500">{option.note}</p>
+              </button>
+            ))}
+          </div>
 
-            {paymentData.method === "Card" ? (
+          <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+            {selectedAppointment ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Consultation</p>
+                <p className="text-lg font-bold text-slate-900">{selectedAppointment.patientName}</p>
+                <p className="text-sm text-slate-600">
+                  {formatDisplayDate(selectedAppointment.date)} · {formatRange(selectedAppointment.start, selectedAppointment.end)}
+                </p>
+                <p className="text-sm text-slate-600">
+                  Amount due: <span className="font-semibold text-emerald-700">{peso(fees.online)}</span>
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Select a pending online consultation to start the payment flow.</p>
+            )}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleStartPayment}
+              disabled={isLoading || isSubmitting || !selectedAppointmentId}
+              className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-700"
+            >
+              {isSubmitting ? "Processing..." : selectedMethod === "Card" ? "Start Card Payment" : "Create Payment Request"}
+            </button>
+
+            {selectedPayment?.status === "Pending" ? (
               <>
-                <Field label="Cardholder Full Name">
-                  <input
-                    type="text"
-                    value={paymentData.fullName}
-                    onChange={(event) => updateField("fullName", event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                    placeholder="John Doe"
-                  />
-                </Field>
-
-                <Field label="Card Number">
-                  <input
-                    type="text"
-                    value={paymentData.cardNumber}
-                    onChange={(event) => updateField("cardNumber", event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                    placeholder="1234 5678 9012 3456"
-                  />
-                </Field>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <Field label="Expiry Date">
-                    <input
-                      type="text"
-                      value={paymentData.expiryDate}
-                      onChange={(event) => updateField("expiryDate", event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                      placeholder="MM/YY"
-                    />
-                  </Field>
-                  <Field label="CVV">
-                    <input
-                      type="text"
-                      value={paymentData.cvv}
-                      onChange={(event) => updateField("cvv", event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-900 outline-none ring-teal-200 focus:ring"
-                      placeholder="123"
-                    />
-                  </Field>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => updateSelectedPaymentStatus("Paid")}
+                  disabled={isSubmitting}
+                  className="rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                >
+                  Mark Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateSelectedPaymentStatus("Failed")}
+                  disabled={isSubmitting}
+                  className="rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                >
+                  Mark Failed
+                </button>
               </>
             ) : null}
+          </div>
+        </section>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={isLoading || isSubmitting || !paymentData.appointmentId}
-                className="rounded-xl bg-teal-700 px-6 py-3 font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-teal-300"
-              >
-                {isSubmitting ? "Processing Payment..." : "Confirm Payment"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentData(DEFAULT_FORM);
-                  setFeedback(null);
-                }}
-                className="rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Reset
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover-lift animate-fade-in-up stagger-5">
-          <h2 className="text-lg font-bold text-slate-900">Pending Consultations</h2>
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status Board</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-900">Online payment statuses</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Online consultations stay blocked from meeting access until payment is confirmed.
+            Appointment confirmation depends on the latest payment status for the online consultation.
           </p>
 
           <div className="mt-6 space-y-4">
-            {pendingAppointments.length ? (
-              pendingAppointments.map((appointment, i) => {
+            {onlineAppointments.length > 0 ? (
+              onlineAppointments.map((appointment) => {
+                const payment = latestPaymentByAppointment.get(appointment.id) ?? null;
                 const doctor = getDoctorById(appointment.doctorId);
 
                 return (
-                  <div
-                    key={appointment.id}
-                    className={`rounded-2xl border border-slate-200 p-4 transition-all hover:border-amber-300 hover:bg-amber-50/30 animate-slide-in-left stagger-${Math.min(i + 1, 6)}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
+                  <div key={appointment.id} className="rounded-[1.5rem] border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{appointment.patientName}</p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {doctor?.name} · {formatDisplayDate(appointment.date)} ·{" "}
-                          {formatRange(appointment.start, appointment.end)}
+                          {doctor?.name} · {formatDisplayDate(appointment.date)} · {formatRange(appointment.start, appointment.end)}
                         </p>
                       </div>
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 animate-soft-pulse">
-                        Pending Payment
-                      </span>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={payment?.status ?? "Pending"} label={`Payment: ${payment?.status ?? "Not Started"}`} />
+                        <Badge
+                          tone={appointment.status === "Confirmed" || appointment.status === "Paid" ? "Paid" : "Pending"}
+                          label={`Appointment: ${appointment.status}`}
+                        />
+                      </div>
                     </div>
-                    <p className="mt-3 text-sm text-slate-600">
-                      Charge: <span className="font-semibold">{peso(fees.online)}</span>. Meeting link generated immediately after payment.
-                    </p>
+
+                    <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
+                      <p>Method: <span className="font-medium text-slate-900">{formatMethod(payment?.method)}</span></p>
+                      <p>Amount: <span className="font-medium text-slate-900">{peso(payment?.amount ?? fees.online)}</span></p>
+                      <p>Meeting Link: <span className="font-medium text-slate-900">{appointment.meetingLink ? "Ready" : "Locked"}</span></p>
+                    </div>
                   </div>
                 );
               })
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-                <div className="mx-auto h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center mb-2">
-                  <svg className="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <p className="text-sm text-slate-500">All online consultations are paid. Nice.</p>
+              <div className="rounded-[1.5rem] border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
+                No online consultations found yet.
               </div>
             )}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function PaymentMetric({
-  label,
-  value,
-  note,
-  tone,
-}: {
-  label: string;
-  value: string;
-  note: string;
-  tone: "red" | "emerald" | "slate";
-}) {
-  const colorByTone = {
-    red: "text-red-600",
-    emerald: "text-emerald-600",
-    slate: "text-slate-900",
-  };
-  const accentByTone = {
-    red: "bg-red-500",
-    emerald: "bg-emerald-500",
-    slate: "bg-slate-400",
-  };
-
+function HeroMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover-lift">
-      <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accentByTone[tone]}`} />
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`mt-2 text-3xl font-bold ${colorByTone[tone]}`}>{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{note}</p>
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-100">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-white">{value}</p>
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block text-sm font-medium text-slate-700">
-      {label}
-      {children}
-    </label>
-  );
+function Badge({ tone, label }: { tone: "Pending" | "Paid" | "Failed"; label: string }) {
+  const classes =
+    tone === "Paid"
+      ? "bg-emerald-50 text-emerald-700"
+      : tone === "Failed"
+        ? "bg-red-50 text-red-700"
+        : "bg-amber-50 text-amber-700";
+
+  return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
 }
 
+function formatMethod(method?: OnlinePaymentMethod) {
+  if (method === "QR") return "QR Payment";
+  if (method === "BankTransfer") return "Bank Transfer";
+  if (method === "Card") return "Card Payment";
+  return "No payment yet";
+}

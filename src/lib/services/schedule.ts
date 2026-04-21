@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { isPastInClinicTime } from "@/src/lib/timezone";
 import type {
   DoctorSchedule,
   DoctorUnavailability,
@@ -107,10 +108,8 @@ export async function getAvailability(doctorId: string, date: string): Promise<S
     byStart.set(key, (byStart.get(key) ?? 0) + 1);
   }
 
-  const now = new Date();
   return slots.map((s) => {
-    const slotStart = new Date(`${date}T${s.start}Z`);
-    const past = slotStart.getTime() < now.getTime();
+    const past = isPastInClinicTime(date, s.start);
     const blocked = overlapsUnavailable(date, s.start, s.end, blocks);
     const taken = byStart.get(s.start) ?? 0;
     const full = taken >= 5;

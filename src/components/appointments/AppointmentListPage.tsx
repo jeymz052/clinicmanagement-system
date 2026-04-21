@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 import {
   deleteAppointmentAction,
   markAppointmentPaidAction,
   updateAppointmentAction,
 } from "@/app/(dashboard)/appointments/actions";
+import { SharedSlotPicker } from "@/src/components/appointments/SharedSlotPicker";
+import { useAppointmentAvailability } from "@/src/components/appointments/useAppointmentAvailability";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
+import { useDoctors } from "@/src/components/appointments/useDoctors";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import {
-  DOCTORS,
   formatDisplayDate,
   formatRange,
   getAppointmentSummary,
@@ -17,17 +19,21 @@ import {
   type AppointmentRecord,
   type AppointmentType,
 } from "@/src/lib/appointments";
+import { getClinicToday } from "@/src/lib/timezone";
 
 type AppointmentListPageProps = {
   title?: string;
   description?: string;
 };
 
+const today = getClinicToday();
+
 export default function AppointmentListPage({
   title = "Appointment List",
-  description = "Full appointment CRUD with shared-slot validation and payment-aware consultation flow.",
+  description = "Manage clinic and online bookings with live shared-slot validation.",
 }: AppointmentListPageProps) {
   const { accessToken, role } = useRole();
+  const { doctors } = useDoctors();
   const { appointments, setAppointments, isLoading, error } = useAppointments();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,6 +44,15 @@ export default function AppointmentListPage({
     `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
   );
   const canManage = role !== "PATIENT";
+  const activeDraftDoctorId = draft?.doctorId ?? "";
+  const activeDraftDate = draft?.date ?? today;
+  const activeDraftType = draft?.type ?? "Clinic";
+  const {
+    slotStatuses,
+    blockedReason,
+    nextAvailableSlot,
+    isLoading: isLoadingAvailability,
+  } = useAppointmentAvailability(activeDraftDoctorId, activeDraftDate, activeDraftType);
 
   function beginEdit(appointment: AppointmentRecord) {
     setEditingId(appointment.id);
@@ -46,7 +61,15 @@ export default function AppointmentListPage({
   }
 
   function updateDraft<K extends keyof AppointmentRecord>(field: K, value: AppointmentRecord[K]) {
-    setDraft((current) => (current ? { ...current, [field]: value } : current));
+    setDraft((current) => {
+      if (!current) return current;
+      const next = { ...current, [field]: value };
+      if (field === "doctorId" || field === "date" || field === "type") {
+        next.start = "";
+        next.end = "";
+      }
+      return next;
+    });
   }
 
   function saveDraft() {
@@ -81,6 +104,7 @@ export default function AppointmentListPage({
       setFeedback("Sign in again to continue.");
       return;
     }
+
     startUpdateTransition(async () => {
       const result = await deleteAppointmentAction(accessToken, appointmentId);
       setAppointments(result.appointments);
@@ -93,6 +117,7 @@ export default function AppointmentListPage({
       setFeedback("Sign in again to continue.");
       return;
     }
+
     startUpdateTransition(async () => {
       try {
         const checkoutRes = await fetch("/api/v2/payments/checkout", {
@@ -119,12 +144,17 @@ export default function AppointmentListPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+          Edits reuse the same shared-slot rules as the booking form, so conflicting or full hours stay blocked here too.
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <SummaryCard label="Total" value={summary.total} tone="slate" />
         <SummaryCard label="Confirmed / Completed" value={summary.confirmedCount} tone="emerald" />
         <SummaryCard label="Pending Payment" value={summary.pendingCount} tone="amber" />
@@ -142,126 +172,136 @@ export default function AppointmentListPage({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition-all duration-200 hover:border-teal-300 hover:shadow-lg animate-fade-in">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
-            <tr>
-              <th className="px-6 py-4 font-semibold">Patient</th>
-              <th className="px-6 py-4 font-semibold">Doctor</th>
-              <th className="px-6 py-4 font-semibold">Schedule</th>
-              <th className="px-6 py-4 font-semibold">Queue</th>
-              <th className="px-6 py-4 font-semibold">Type</th>
-              <th className="px-6 py-4 font-semibold">Status</th>
-              <th className="px-6 py-4 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedAppointments.map((appointment) => {
-              const doctor = getDoctorById(appointment.doctorId);
-              const isEditing = editingId === appointment.id && draft !== null;
+      <div className="space-y-4">
+        {sortedAppointments.map((appointment) => {
+          const doctor = doctors.find((item) => item.id === appointment.doctorId)
+            ?? (appointment.doctorId ? getDoctorById(appointment.doctorId) : null);
+          const isEditing = editingId === appointment.id && draft !== null;
 
-              return (
-                <tr key={appointment.id} className="border-t border-slate-200 align-top">
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2" />
-                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2" />
+          return (
+            <article key={appointment.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold text-slate-900">{appointment.patientName}</h2>
+                    <Badge tone={appointment.type === "Clinic" ? "emerald" : "sky"}>{appointment.type}</Badge>
+                    <Badge tone={appointment.status === "Pending Payment" ? "amber" : "emerald"}>{appointment.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {doctor?.name ?? "Assigned doctor"} | {formatDisplayDate(appointment.date)} | {formatRange(appointment.start, appointment.end)} | Queue #{appointment.queueNumber}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">{appointment.reason || "No consultation reason provided."}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
+                    <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
+                      Continue Payment
+                    </button>
+                  ) : null}
+                  {appointment.meetingLink ? (
+                    <a href={appointment.meetingLink} target="_blank" rel="noreferrer" className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50">
+                      Open Meeting Link
+                    </a>
+                  ) : null}
+                  {canManage && !isEditing ? (
+                    <>
+                      <button type="button" onClick={() => beginEdit(appointment)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                        Cancel
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              {isEditing ? (
+                <div className="space-y-5 px-5 py-5">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Patient details</p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Patient name" />
+                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Email" />
+                        <input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Phone" />
+                        <input value={draft.reason} onChange={(event) => updateDraft("reason", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Reason" />
                       </div>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-slate-900">{appointment.patientName}</p>
-                        <p className="mt-1 text-xs text-slate-500">{appointment.reason}</p>
-                      </>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <select value={draft.doctorId} onChange={(event) => updateDraft("doctorId", event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2">
-                        {DOCTORS.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="text-slate-600">
-                        <p>{doctor?.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{doctor?.specialty}</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Schedule setup</p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <select value={draft.doctorId} onChange={(event) => updateDraft("doctorId", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+                          {doctors.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                        <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+                          <option value="Clinic">Clinic</option>
+                          <option value="Online">Online</option>
+                        </select>
+                        <input type="date" min={today} value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                        {nextAvailableSlot ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateDraft("date", nextAvailableSlot.date);
+                              updateDraft("start", nextAvailableSlot.slot.start);
+                              updateDraft("end", nextAvailableSlot.slot.end);
+                            }}
+                            className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-100"
+                          >
+                            Use next available
+                          </button>
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500">
+                            Pick a date to load available times.
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <input type="date" value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2" />
-                        <input type="time" value={draft.start} onChange={(event) => updateDraft("start", event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2" />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600">
-                        <p>{formatDisplayDate(appointment.date)}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {formatRange(appointment.start, appointment.end)}
-                        </p>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">#{appointment.queueNumber}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {isEditing ? (
-                      <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-lg border border-slate-200 px-3 py-2">
-                        <option value="Clinic">Clinic</option>
-                        <option value="Online">Online</option>
-                      </select>
-                    ) : (
-                      <Badge tone={appointment.type === "Clinic" ? "emerald" : "sky"}>{appointment.type}</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge tone={appointment.status === "Pending Payment" ? "amber" : appointment.status === "Paid" ? "sky" : "emerald"}>
-                      {appointment.status}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      {canManage && !isEditing ? (
-                        <>
-                          <button type="button" onClick={() => beginEdit(appointment)} className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-700">
-                            Delete
-                          </button>
-                        </>
-                      ) : null}
-                      {isEditing ? (
-                        <>
-                          <button type="button" onClick={saveDraft} disabled={isUpdating} className="rounded-lg bg-teal-700 px-3 py-1 text-xs font-semibold text-white">
-                            Save
-                          </button>
-                          <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
-                            Cancel
-                          </button>
-                        </>
-                      ) : null}
-                      {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
-                        <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-lg bg-sky-600 px-3 py-1 text-xs font-semibold text-white">
-                          Confirm Payment
-                        </button>
+                      {blockedReason ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                          {blockedReason}
+                        </div>
                       ) : null}
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {isLoading ? (
-          <div className="border-t border-slate-200 px-6 py-4 text-sm text-slate-500">Loading appointments...</div>
-        ) : null}
+                  </div>
+
+                  <SharedSlotPicker
+                    slotStatuses={slotStatuses}
+                    selectedStart={draft.start}
+                    onSelect={(start) => {
+                      const selected = slotStatuses.find((slot) => slot.start === start);
+                      updateDraft("start", start);
+                      updateDraft("end", selected?.end ?? "");
+                    }}
+                    disabled={isUpdating}
+                    loading={isLoadingAvailability}
+                    subtitle="Only available shared slots can be selected while editing."
+                  />
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                    <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                      Cancel
+                    </button>
+                    <button type="button" onClick={saveDraft} disabled={isUpdating || !draft.start} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-teal-300">
+                      {isUpdating ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-500">Loading appointments...</div>
+      ) : null}
     </div>
   );
 }
@@ -274,14 +314,14 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
     sky: "text-sky-600",
   };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md transition-all duration-200 hover:bg-teal-50 hover:border-teal-300 hover:scale-[1.04] animate-fade-in">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-teal-300 hover:bg-teal-50/40">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className={`mt-3 text-3xl font-bold ${styles[tone]}`}>{value}</p>
     </div>
   );
 }
 
-function Badge({ children, tone }: { children: React.ReactNode; tone: "emerald" | "amber" | "sky" }) {
+function Badge({ children, tone }: { children: ReactNode; tone: "emerald" | "amber" | "sky" }) {
   const styles = {
     emerald: "bg-emerald-100 text-emerald-700",
     amber: "bg-amber-100 text-amber-700",

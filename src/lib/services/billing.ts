@@ -16,6 +16,9 @@ export type BillingItemInput = {
   unit_price: number;
 };
 
+const POS_ALLOWED_CATEGORIES = new Set(["Consultation", "Lab", "Medicine"]);
+const POS_ALLOWED_METHODS = new Set<PaymentMethod>(["Cash", "Card", "BankTransfer"]);
+
 export async function issueBilling(input: {
   appointment_id: string;
   items: BillingItemInput[];
@@ -33,9 +36,49 @@ export async function issueBilling(input: {
   if (input.items.length === 0)
     throw new HttpError(400, "At least one billing item is required");
 
-  const subtotal = input.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
-
   const supabase = getSupabaseAdmin();
+  const pricingIds = [...new Set(input.items.map((item) => item.pricing_id).filter((value): value is string => !!value))];
+  if (pricingIds.length !== input.items.length) {
+    throw new HttpError(400, "POS billing requires catalog services only.");
+  }
+
+  const { data: pricingRows, error: pricingError } = await supabase
+    .from("pricing")
+    .select("id, name, category, price, is_active")
+    .in("id", pricingIds);
+  if (pricingError) throw pricingError;
+
+  const pricingById = new Map(
+    (pricingRows ?? []).map((row) => [
+      row.id as string,
+      row as { id: string; name: string; category: string; price: number; is_active: boolean },
+    ]),
+  );
+
+  const normalizedItems = input.items.map((item) => {
+    if (!item.pricing_id) throw new HttpError(400, "Each POS line must use a clinic pricing item.");
+    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+      throw new HttpError(400, "Quantity must be greater than zero.");
+    }
+
+    const pricingItem = pricingById.get(item.pricing_id);
+    if (!pricingItem || !pricingItem.is_active) {
+      throw new HttpError(400, "One or more POS services are unavailable.");
+    }
+    if (!POS_ALLOWED_CATEGORIES.has(pricingItem.category)) {
+      throw new HttpError(400, "POS only allows Consultation, Lab, and Medicine services.");
+    }
+
+    return {
+      pricing_id: pricingItem.id,
+      description: pricingItem.name,
+      quantity: item.quantity,
+      unit_price: Number(pricingItem.price),
+    };
+  });
+
+  const subtotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+
   const { data: billing, error: billErr } = await supabase
     .from("billings")
     .insert({
@@ -54,7 +97,7 @@ export async function issueBilling(input: {
   const { data: items, error: itemsErr } = await supabase
     .from("billing_items")
     .insert(
-      input.items.map((i) => ({
+      normalizedItems.map((i) => ({
         billing_id: billing.id,
         pricing_id: i.pricing_id ?? null,
         description: i.description,
@@ -82,6 +125,8 @@ export async function recordBillingPayment(
 ): Promise<{ billing: Billing; payment: Payment }> {
   if (!isStaff(actor.profile.role))
     throw new HttpError(403, "Only staff can record POS payments");
+  if (!POS_ALLOWED_METHODS.has(method))
+    throw new HttpError(400, "POS only accepts Cash, Transfer, or Card payments");
 
   const supabase = getSupabaseAdmin();
   const { data: billing, error } = await supabase
@@ -92,6 +137,12 @@ export async function recordBillingPayment(
   if (error) throw new HttpError(404, "Billing not found");
   if (billing.status === "Paid") throw new HttpError(400, "Billing already paid");
   if (billing.status === "Void") throw new HttpError(400, "Billing is void");
+  if (!billing.appointment_id) throw new HttpError(400, "POS payment requires a clinic appointment billing.");
+
+  const appt = await getAppointment(billing.appointment_id);
+  if (appt.appointment_type !== "Clinic") {
+    throw new HttpError(400, "POS payment is clinic-only.");
+  }
 
   const { data: payment, error: payErr } = await supabase
     .from("payments")

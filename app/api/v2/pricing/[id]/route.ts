@@ -1,4 +1,4 @@
-import { HttpError, httpError, ok, requireActor, isStaff } from "@/src/lib/http";
+import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const actor = await requireActor(req);
-    if (!isStaff(actor.profile.role)) throw new HttpError(403, "Forbidden");
+    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
     const { id } = await params;
     const body = await req.json();
 
@@ -27,7 +27,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(req: Request, { params }: Ctx) {
   try {
     const actor = await requireActor(req);
-    if (!isStaff(actor.profile.role)) throw new HttpError(403, "Forbidden");
+    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
     const { id } = await params;
 
     const supabase = getSupabaseAdmin();

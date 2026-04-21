@@ -1,4 +1,4 @@
-import { HttpError, httpError, ok, requireActor, isStaff } from "@/src/lib/http";
+import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 export async function GET(req: Request) {
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const actor = await requireActor(req);
-    if (!isStaff(actor.profile.role)) throw new HttpError(403, "Forbidden");
+    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
     const body = await req.json();
     if (!body.code || !body.name || !body.category || body.price == null)
       throw new HttpError(400, "code, name, category, price required");
