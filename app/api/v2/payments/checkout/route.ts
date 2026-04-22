@@ -2,6 +2,7 @@ import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
 import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { createStripeCheckoutSession } from "@/src/lib/services/stripe";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
 
 /**
  * POST /api/v2/payments/checkout
@@ -23,6 +24,11 @@ export async function POST(req: Request) {
       throw new HttpError(400, `Cannot create checkout for status ${appt.status}`);
 
     const doctor = await getDoctor(appt.doctor_id);
+    const amount = calculateConsultationCharge(
+      Number(doctor.consultation_fee_online),
+      appt.start_time,
+      appt.end_time,
+    );
 
     // Find the patient's email
     const supabase = getSupabaseAdmin();
@@ -35,7 +41,7 @@ export async function POST(req: Request) {
 
     const { session } = await createStripeCheckoutSession({
       appointment: appt,
-      amount: Number(doctor.consultation_fee_online),
+      amount,
       customerEmail: profile.email,
     });
 

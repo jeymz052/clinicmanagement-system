@@ -18,6 +18,7 @@ import {
   type AppointmentType,
 } from "@/src/lib/appointments";
 import { getClinicToday } from "@/src/lib/timezone";
+import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
 
 type BookingForm = {
   patientName: string;
@@ -66,6 +67,18 @@ export default function BookAppointmentPage() {
     error: availabilityError,
   } = useAppointmentAvailability(formData.doctorId, formData.date, formData.type);
   const selectedSlot = slotStatuses.find((slot) => slot.start === formData.start) ?? null;
+  const estimatedFee = selectedSlot
+    ? calculateConsultationCharge(
+        formData.type === "Online" ? fees.online : fees.clinic,
+        selectedSlot.start,
+        selectedSlot.end,
+      )
+    : formData.type === "Online"
+      ? fees.online
+      : fees.clinic;
+  const selectedSlotDuration = selectedSlot
+    ? formatDurationLabel(selectedSlot.start, selectedSlot.end)
+    : "1 hr";
 
   const BOOKING_STEP_LABELS = [
     "Service & Doctor",
@@ -333,11 +346,11 @@ export default function BookAppointmentPage() {
                     <p className="mt-1 text-sm text-slate-600">{selectedDoctor?.specialty ?? "General practice"}</p>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-[1.2rem] border border-white/70 bg-white/80 px-3 py-3 shadow-sm">
-                        <p className="text-slate-500">Clinic fee</p>
+                        <p className="text-slate-500">Clinic rate / hr</p>
                         <p className="mt-2 text-lg font-semibold text-slate-900">PHP {fees.clinic.toLocaleString()}</p>
                       </div>
                       <div className="rounded-[1.2rem] border border-white/70 bg-white/80 px-3 py-3 shadow-sm">
-                        <p className="text-slate-500">Online fee</p>
+                        <p className="text-slate-500">Online rate / hr</p>
                         <p className="mt-2 text-lg font-semibold text-slate-900">PHP {fees.online.toLocaleString()}</p>
                       </div>
                     </div>
@@ -486,14 +499,15 @@ export default function BookAppointmentPage() {
                       <SummaryRow label="Doctor" value={selectedDoctor?.name ?? "-"} done />
                       <SummaryRow label="Date" value={formatDisplayDate(formData.date)} done={!!formData.date} />
                       <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "Choose a slot"} done={!!selectedSlot} />
+                      <SummaryRow label="Duration" value={selectedSlot ? selectedSlotDuration : "Select a slot"} done={!!selectedSlot} />
                       <SummaryRow label="Queue #" value={selectedSlot?.nextQueueNumber ? String(selectedSlot.nextQueueNumber) : "Will appear after slot selection"} done={!!selectedSlot} />
                       <SummaryRow label="Payment" value={formData.type === "Clinic" ? "Pay after consultation" : "Pay now to confirm"} done />
                     </div>
                   </div>
                   <div className="mt-4 rounded-[1.4rem] border border-emerald-100 bg-white px-4 py-4 shadow-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Estimated fee</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Estimated fee ({selectedSlotDuration})</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">
-                      PHP {(formData.type === "Online" ? fees.online : fees.clinic).toLocaleString()}
+                      PHP {estimatedFee.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -517,8 +531,9 @@ export default function BookAppointmentPage() {
                   {formData.reason ? <SummaryRow label="Reason" value={formData.reason} done /> : null}
                   <SummaryRow label="Date" value={formatDisplayDate(formData.date)} done={datePicked} />
                   <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "-"} done={step3Valid} />
+                  <SummaryRow label="Duration" value={selectedSlot ? selectedSlotDuration : "-"} done={step3Valid} />
                   {selectedSlot ? <SummaryRow label="Queue #" value={String(selectedSlot.nextQueueNumber)} done /> : null}
-                  <SummaryRow label={formData.type === "Online" ? "Fee (pay now)" : "Fee (pay after)"} value={`PHP ${(formData.type === "Online" ? fees.online : fees.clinic).toLocaleString()}`} done />
+                  <SummaryRow label={formData.type === "Online" ? "Fee (pay now)" : "Fee (pay after)"} value={`PHP ${estimatedFee.toLocaleString()}`} done />
                 </div>
                 <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Ready to book</p>
@@ -529,9 +544,9 @@ export default function BookAppointmentPage() {
                     {selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "Select a time slot first"}
                   </p>
                   <div className="mt-5 rounded-[1.4rem] border border-emerald-100 bg-emerald-50 px-4 py-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Payment amount</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Payment amount ({selectedSlotDuration})</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">
-                      PHP {(formData.type === "Online" ? fees.online : fees.clinic).toLocaleString()}
+                      PHP {estimatedFee.toLocaleString()}
                     </p>
                   </div>
                 </div>

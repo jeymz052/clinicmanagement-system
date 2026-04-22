@@ -20,7 +20,7 @@ type DraftState = {
 
 export default function OnlineConsultationPage() {
   const { accessToken, role } = useRole();
-  const { appointments } = useAppointments();
+  const { appointments, setAppointments } = useAppointments();
   const { data: notes, setData: setNotes, isLoading, error } = useConsultationNotes();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
@@ -95,6 +95,23 @@ export default function OnlineConsultationPage() {
 
       const payload = (await response.json()) as { data: typeof notes };
       setNotes(payload.data);
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id
+            ? {
+                ...item,
+                status:
+                  draft.status === "Completed"
+                    ? "Completed"
+                    : draft.status === "In Progress"
+                      ? "In Progress"
+                      : appointment.type === "Online"
+                        ? "Paid"
+                        : "Confirmed",
+              }
+            : item,
+        ),
+      );
       setFeedback("Consultation note saved.");
     });
   }

@@ -225,7 +225,7 @@ export default function PricingPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Pricing Management</p>
         <h1 className="mt-3 text-3xl font-bold text-slate-900">Consultation rates and service pricing</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          Manage the dedicated online consultation rate, clinic consultation fee, and the rest of your service catalog from one place.
+          Manage the dedicated online and clinic consultation hourly rates, plus the rest of your service catalog, from one place.
         </p>
       </section>
 
@@ -252,7 +252,7 @@ export default function PricingPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Dedicated Rates</p>
               <h2 className="mt-2 text-xl font-bold text-slate-900">Consultation fees</h2>
               <p className="mt-1 text-sm text-slate-500">
-                These are the actual fees used by the booking and online payment flow.
+                These hourly rates are multiplied by appointment duration when consultation charges are calculated.
               </p>
             </div>
             {!canEdit ? (
@@ -262,15 +262,15 @@ export default function PricingPage() {
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <RateCard
-              label="Online Consultation Rate"
+              label="Online Consultation Rate / Hour"
               value={peso(primaryDoctor?.consultation_fee_online ?? 0)}
-              note="Used for online consultation payments."
+              note="Used for online consultation payments based on the booked duration."
               accent="emerald"
             />
             <RateCard
-              label="Clinic Consultation Fee"
+              label="Clinic Consultation Rate / Hour"
               value={peso(primaryDoctor?.consultation_fee_clinic ?? 0)}
-              note="Used as the clinic consultation base fee."
+              note="Used as the clinic consultation base fee in POS based on appointment duration."
               accent="teal"
             />
           </div>
@@ -288,7 +288,7 @@ export default function PricingPage() {
           {canEdit && primaryDoctor ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">
-                Online consultation rate
+                Online consultation rate per hour
                 <input
                   type="number"
                   min={0}
@@ -300,7 +300,7 @@ export default function PricingPage() {
               </label>
 
               <label className="block text-sm font-medium text-slate-700">
-                Clinic consultation fee
+                Clinic consultation rate per hour
                 <input
                   type="number"
                   min={0}
@@ -318,7 +318,7 @@ export default function PricingPage() {
                   disabled={isSaving}
                   className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-200 disabled:text-emerald-700"
                 >
-                  {isSaving ? "Saving rates..." : "Save Consultation Fees"}
+                  {isSaving ? "Saving rates..." : "Save Consultation Rates"}
                 </button>
               </div>
             </div>
@@ -329,7 +329,7 @@ export default function PricingPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Consultation Catalog</p>
           <h2 className="mt-2 text-xl font-bold text-slate-900">Consultation pricing items</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Keep consultation-specific pricing visible alongside the doctor fee cards above.
+            Keep consultation-specific catalog items visible alongside the hourly rate cards above.
           </p>
 
           <div className="mt-6 space-y-3">

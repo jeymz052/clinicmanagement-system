@@ -4,6 +4,7 @@ import { HttpError, type Actor } from "@/src/lib/http";
 import type { Appointment, Payment, PaymentMethod } from "@/src/lib/db/types";
 import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
+import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
 
 const MEETING_BASE = process.env.MEETING_BASE_URL ?? "https://meet.chiara.clinic";
 const ONLINE_ALLOWED_METHODS = new Set<PaymentMethod>(["QR", "Card", "BankTransfer"]);
@@ -31,6 +32,11 @@ export async function createPaymentIntent(
     throw new HttpError(400, `Cannot create payment for status ${appt.status}`);
 
   const doctor = await getDoctor(appt.doctor_id);
+  const amount = calculateConsultationCharge(
+    Number(doctor.consultation_fee_online),
+    appt.start_time,
+    appt.end_time,
+  );
 
   const supabase = getSupabaseAdmin();
   await supabase
@@ -43,7 +49,7 @@ export async function createPaymentIntent(
     .from("payments")
     .insert({
       appointment_id: appt.id,
-      amount: doctor.consultation_fee_online,
+      amount,
       method,
       status: "Pending",
       provider: method === "Card" ? "stripe" : method === "QR" ? "qr" : "bank_transfer",

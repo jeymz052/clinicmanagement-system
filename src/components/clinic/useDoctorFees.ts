@@ -9,7 +9,7 @@ export type DoctorFees = {
 };
 
 /**
- * Reads consultation fees for the currently-active doctor (slug = 'chiara-punzalan').
+ * Reads consultation hourly rates for the currently-active doctor (slug = 'chiara-punzalan').
  * Falls back to the system_settings default if no doctor row is found.
  */
 export function useDoctorFees(slug = "chiara-punzalan"): {

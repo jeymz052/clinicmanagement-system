@@ -61,10 +61,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="relative min-h-[100svh] bg-slate-50">
+    <div className="relative min-h-[100svh] overflow-x-hidden bg-slate-50">
       <Sidebar role={role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className="lg:pl-56">
+      <div className="min-w-0 lg:pl-56">
         <DashboardHeader
           role={role}
           profile={profile}
@@ -73,7 +73,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           onLogout={handleLogout}
         />
 
-        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">{children}</main>
+        <main className="mx-auto min-w-0 w-full max-w-[1600px] px-3 py-4 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>
   );

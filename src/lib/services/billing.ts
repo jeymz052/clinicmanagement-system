@@ -6,8 +6,9 @@ import type {
   Payment,
   PaymentMethod,
 } from "@/src/lib/db/types";
-import { getAppointment } from "@/src/lib/services/booking";
+import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
+import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
 
 export type BillingItemInput = {
   pricing_id?: string | null;
@@ -33,8 +34,6 @@ export async function issueBilling(input: {
     throw new HttpError(400, "POS billing is clinic-only");
   if (appt.status !== "Completed")
     throw new HttpError(400, "Cannot bill before consultation is completed");
-  if (input.items.length === 0)
-    throw new HttpError(400, "At least one billing item is required");
 
   const supabase = getSupabaseAdmin();
   const pricingIds = [...new Set(input.items.map((item) => item.pricing_id).filter((value): value is string => !!value))];
@@ -76,8 +75,20 @@ export async function issueBilling(input: {
       unit_price: Number(pricingItem.price),
     };
   });
+  const doctor = await getDoctor(appt.doctor_id);
+  const consultationLine = {
+    pricing_id: null,
+    description: `Clinic consultation (${formatDurationLabel(appt.start_time, appt.end_time)} @ PHP ${Number(doctor.consultation_fee_clinic).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)`,
+    quantity: 1,
+    unit_price: calculateConsultationCharge(
+      Number(doctor.consultation_fee_clinic),
+      appt.start_time,
+      appt.end_time,
+    ),
+  };
 
-  const subtotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const allItems = [consultationLine, ...normalizedItems];
+  const subtotal = allItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
 
   const { data: billing, error: billErr } = await supabase
     .from("billings")
@@ -97,7 +108,7 @@ export async function issueBilling(input: {
   const { data: items, error: itemsErr } = await supabase
     .from("billing_items")
     .insert(
-      normalizedItems.map((i) => ({
+      allItems.map((i) => ({
         billing_id: billing.id,
         pricing_id: i.pricing_id ?? null,
         description: i.description,

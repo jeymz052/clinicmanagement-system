@@ -19,6 +19,7 @@ import {
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
 import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
+import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
 
 export type AppointmentCreatePayload = {
   patientName: string;
@@ -441,10 +442,15 @@ export async function markAppointmentPaid(appointmentId: string) {
     .select("consultation_fee_online")
     .eq("id", appt.doctor_id)
     .maybeSingle<{ consultation_fee_online: number }>();
+  const amount = calculateConsultationCharge(
+    Number(doctor?.consultation_fee_online ?? 0),
+    appt.start_time,
+    appt.end_time,
+  );
 
   const { error: payErr } = await supabase.from("payments").insert({
     appointment_id: appt.id,
-    amount: doctor?.consultation_fee_online ?? 0,
+    amount,
     method: "Cash",
     status: "Paid",
     paid_at: new Date().toISOString(),

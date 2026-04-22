@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import type { Appointment, Payment } from "@/src/lib/db/types";
 import { HttpError } from "@/src/lib/http";
+import { formatDurationLabel } from "@/src/lib/consultation-pricing";
 
 /**
  * Thin wrapper around Stripe Checkout Sessions.
@@ -48,7 +49,10 @@ export async function createStripeCheckoutSession(input: {
   body.set("line_items[0][quantity]", "1");
   body.set("line_items[0][price_data][currency]", "php");
   body.set("line_items[0][price_data][unit_amount]", String(Math.round(input.amount * 100)));
-  body.set("line_items[0][price_data][product_data][name]", `Online Consultation — ${input.appointment.appointment_date}`);
+  body.set(
+    "line_items[0][price_data][product_data][name]",
+    `Online Consultation (${formatDurationLabel(input.appointment.start_time, input.appointment.end_time)}) - ${input.appointment.appointment_date}`,
+  );
   body.set("metadata[appointment_id]", input.appointment.id);
 
   const res = await fetch(`${STRIPE_API}/checkout/sessions`, {

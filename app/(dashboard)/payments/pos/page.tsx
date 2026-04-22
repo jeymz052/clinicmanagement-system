@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
+import { useDoctorFees } from "@/src/components/clinic/useDoctorFees";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import { formatDisplayDate, formatRange, type AppointmentRecord } from "@/src/lib/appointments";
+import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
 
 type PricingItem = {
   id: string;
@@ -85,15 +87,27 @@ export default function POSBillingPage() {
     })();
   }, [accessToken, authLoading]);
 
-  const billableAppointments = useMemo(
+  const clinicAppointments = useMemo(
     () =>
       appointments
-        .filter((a) => a.type === "Clinic" && a.status === "Completed")
+        .filter((a) => a.type === "Clinic")
         .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
     [appointments],
   );
 
+  const billableAppointments = useMemo(
+    () =>
+      clinicAppointments.filter((a) => a.status === "Completed"),
+    [clinicAppointments],
+  );
+
+  const pendingClinicAppointments = useMemo(
+    () => clinicAppointments.filter((a) => a.status !== "Completed"),
+    [clinicAppointments],
+  );
+
   const selectedAppt = billableAppointments.find((a) => a.id === selectedApptId) ?? null;
+  const { fees: selectedDoctorFees } = useDoctorFees(selectedAppt?.doctorId ?? "chiara-punzalan");
   const posPricing = useMemo(
     () => pricing.filter((item) => item.is_active && isPOSCategory(item.category)),
     [pricing],
@@ -111,7 +125,10 @@ export default function POSBillingPage() {
   );
 
   const validItems = lines.filter((line) => line.pricing_id && line.quantity > 0 && line.unit_price > 0);
-  const subtotal = validItems.reduce((sum, line) => sum + line.quantity * line.unit_price, 0);
+  const consultationBaseFee = selectedAppt
+    ? calculateConsultationCharge(selectedDoctorFees.clinic, selectedAppt.start, selectedAppt.end)
+    : 0;
+  const subtotal = consultationBaseFee + validItems.reduce((sum, line) => sum + line.quantity * line.unit_price, 0);
   const total = Math.max(0, subtotal - discount + tax);
 
   function updateLine(tempId: string, patch: Partial<Line>) {
@@ -173,11 +190,6 @@ export default function POSBillingPage() {
       setFeedback({ message: "Pick a completed clinic appointment first.", tone: "error" });
       return;
     }
-    if (validItems.length === 0) {
-      setFeedback({ message: "Add at least one Consultation, Lab, or Medicine service before generating the bill.", tone: "error" });
-      return;
-    }
-
     startTransition(async () => {
       const res = await fetch("/api/v2/billings", {
         method: "POST",
@@ -296,7 +308,11 @@ export default function POSBillingPage() {
                   className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 >
                   <option value="">
-                    {billableAppointments.length === 0 ? "No completed clinic visits yet" : "Select appointment"}
+                    {billableAppointments.length === 0
+                      ? pendingClinicAppointments.length > 0
+                        ? `${pendingClinicAppointments.length} clinic booking(s) found, but none completed yet`
+                        : "No completed clinic visits yet"
+                      : "Select appointment"}
                   </option>
                   {billableAppointments.map((appt) => (
                     <AppointmentOption key={appt.id} appt={appt} />
@@ -311,14 +327,27 @@ export default function POSBillingPage() {
                     <p className="mt-2 text-lg font-bold text-slate-900">{selectedAppt.patientName}</p>
                     <p className="mt-1 text-sm text-slate-600">{formatDisplayDate(selectedAppt.date)}</p>
                     <p className="mt-1 text-sm text-slate-500">{formatRange(selectedAppt.start, selectedAppt.end)}</p>
+                    <p className="mt-2 text-sm text-emerald-700">
+                      Base consultation: {peso(consultationBaseFee)} ({formatDurationLabel(selectedAppt.start, selectedAppt.end)} at {peso(selectedDoctorFees.clinic)}/hr)
+                    </p>
                   </>
                 ) : (
                   <div className="text-sm text-slate-500">
-                    Pick an appointment to load the patient and start building the clinic bill.
+                    {pendingClinicAppointments.length > 0
+                      ? "Booked clinic appointments are detected, but POS only unlocks them after the consultation is marked completed."
+                      : "Pick an appointment to load the patient and start building the clinic bill."}
                   </div>
                 )}
               </div>
             </div>
+
+            {billableAppointments.length === 0 && pendingClinicAppointments.length > 0 ? (
+              <div className="mt-4 rounded-[1.4rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {pendingClinicAppointments.length} clinic appointment(s) exist, but they are still{" "}
+                {pendingClinicAppointments.map((appt) => appt.status).filter((value, index, all) => all.indexOf(value) === index).join(" / ")}.
+                POS billing only allows appointments after the doctor marks the visit as completed in the consultation flow.
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
@@ -532,6 +561,10 @@ export default function POSBillingPage() {
 
               <div className="rounded-[1.5rem] border border-emerald-200 bg-white px-4 py-4">
                 <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Consultation Base Fee</span>
+                  <span>{peso(consultationBaseFee)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
                   <span>Subtotal</span>
                   <span>{peso(subtotal)}</span>
                 </div>

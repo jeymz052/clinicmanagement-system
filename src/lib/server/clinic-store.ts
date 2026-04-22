@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { assertEmailNotProtectedPatient } from "@/src/lib/auth/protected-accounts";
 import {
   getDoctorSlugById,
   resolveDoctorIdBySlug,
@@ -173,6 +174,7 @@ export async function createPatient(
 ): Promise<PatientRecordItem[]> {
   const supabase = getSupabaseAdmin();
   const normalized = patientRecordToRegistrationFields(payload);
+  assertEmailNotProtectedPatient(normalized.email);
   const validationError = validatePatientRegistrationFields(normalized);
   if (validationError) throw new Error(validationError);
 

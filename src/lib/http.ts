@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { DbRole, Profile } from "@/src/lib/db/types";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { resolveProtectedDbRole } from "@/src/lib/auth/protected-accounts";
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -56,7 +57,12 @@ export async function getActor(req: Request): Promise<Actor | null> {
   if (profileError || !profile) return null;
   if (!profile.is_active) return null;
 
-  return { id: profile.id, profile };
+  const normalizedProfile: Profile = {
+    ...profile,
+    role: resolveProtectedDbRole(profile.role, profile.email) as DbRole,
+  };
+
+  return { id: normalizedProfile.id, profile: normalizedProfile };
 }
 
 export async function requireActor(req: Request): Promise<Actor> {

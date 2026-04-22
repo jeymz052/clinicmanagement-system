@@ -10,6 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { DEFAULT_ROLE, type UserRole } from "@/src/lib/roles";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase/client";
+import { resolveProtectedUiRole } from "@/src/lib/auth/protected-accounts";
 
 type UserProfile = {
   id: string;
@@ -35,7 +36,7 @@ type RoleContextValue = {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 function readRoleFromUser(user: User | null): UserRole {
-  return roleToUiRole(user?.app_metadata?.role) ?? DEFAULT_ROLE;
+  return resolveProtectedUiRole(roleToUiRole(user?.app_metadata?.role), user?.email) ?? DEFAULT_ROLE;
 }
 
 function isValidRole(value: unknown): value is UserRole {
@@ -79,8 +80,11 @@ async function fetchRoleFromApi(accessToken: string): Promise<UserRole | null> {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) continue;
-      const payload = (await res.json()) as { profile?: { role?: string } };
-      const parsedRole = roleToUiRole(payload.profile?.role);
+      const payload = (await res.json()) as { profile?: { role?: string; email?: string } };
+      const parsedRole = resolveProtectedUiRole(
+        roleToUiRole(payload.profile?.role),
+        payload.profile?.email,
+      );
       if (parsedRole) return parsedRole;
     } catch {
       // Network timeouts can happen in local dev; retry briefly before fallback.
@@ -105,7 +109,12 @@ async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | n
       });
       if (!res.ok) continue;
       const payload = (await res.json()) as { profile?: UserProfile };
-      if (payload.profile) return payload.profile;
+      if (payload.profile) {
+        return {
+          ...payload.profile,
+          role: resolveProtectedUiRole(roleToUiRole(payload.profile.role), payload.profile.email) ?? payload.profile.role,
+        };
+      }
     } catch {
       // Network timeouts can happen in local dev; retry briefly before fallback.
     }

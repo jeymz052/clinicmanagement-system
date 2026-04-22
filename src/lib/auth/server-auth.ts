@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import type { UserRole } from "@/src/lib/roles";
+import { resolveProtectedUiRole } from "@/src/lib/auth/protected-accounts";
 
 export type AuthenticatedUser = {
   user: User;
@@ -34,7 +35,7 @@ function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
 
 export function readRoleFromUser(user: User): UserRole {
   const role = user.app_metadata?.role;
-  return isValidRole(role) ? role : "PATIENT";
+  return resolveProtectedUiRole(isValidRole(role) ? role : null, user.email) ?? "PATIENT";
 }
 
 export async function requireAuthenticatedUser(accessToken: string) {
@@ -49,13 +50,14 @@ export async function requireAuthenticatedUser(accessToken: string) {
   // if profile row is missing (e.g. trigger didn't fire).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, email")
     .eq("id", data.user.id)
-    .maybeSingle<{ role: string }>();
+    .maybeSingle<{ role: string; email: string }>();
 
-  const role: UserRole = profile?.role
-    ? dbRoleToUiRole(profile.role)
-    : readRoleFromUser(data.user);
+  const role: UserRole = resolveProtectedUiRole(
+    profile?.role ? dbRoleToUiRole(profile.role) : readRoleFromUser(data.user),
+    profile?.email ?? data.user.email,
+  ) ?? "PATIENT";
 
   return { user: data.user, role } satisfies AuthenticatedUser;
 }

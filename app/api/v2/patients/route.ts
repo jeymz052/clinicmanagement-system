@@ -1,5 +1,6 @@
 import { HttpError, httpError, ok, requireActor, isStaff } from "@/src/lib/http";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { isProtectedSuperAdminEmail } from "@/src/lib/auth/protected-accounts";
 
 export async function GET(req: Request) {
   try {
@@ -31,6 +32,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     if (!body.email || !body.full_name)
       throw new HttpError(400, "email and full_name required");
+    if (isProtectedSuperAdminEmail(body.email)) {
+      throw new HttpError(400, "This email is reserved for the super admin account.");
+    }
 
     const supabase = getSupabaseAdmin();
 

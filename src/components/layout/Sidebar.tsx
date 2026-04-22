@@ -267,7 +267,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       />
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-[100svh] max-h-[100svh] w-56 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:h-screen lg:max-h-screen lg:translate-x-0 lg:shadow-none ${
+        className={`fixed left-0 top-0 z-40 flex h-[100svh] max-h-[100svh] w-[min(17rem,86vw)] flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:h-screen lg:max-h-screen lg:w-56 lg:translate-x-0 lg:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -280,8 +280,8 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
               height={373}
               priority
               quality={100}
-              style={{ width: "180px", height: "auto" }}
-              className="object-contain -my-2"
+              style={{ width: "160px", height: "auto" }}
+              className="object-contain -my-2 sm:w-[180px]"
             />
             <button
               className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden"

@@ -74,6 +74,14 @@ function getInitials(name: string | null | undefined) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "CU";
 }
 
+function getCompactName(name: string | null | undefined) {
+  const value = name?.trim();
+  if (!value) return "User";
+  const [first, second] = value.split(/\s+/);
+  if (!first) return "User";
+  return second ? `${first} ${second[0]?.toUpperCase() ?? ""}.` : first;
+}
+
 function formatRelativeDate(input: string) {
   const value = new Date(input);
   const diffMinutes = Math.round((Date.now() - value.getTime()) / 60000);
@@ -132,6 +140,7 @@ export function DashboardHeader({
   const pageTitle = PAGE_TITLES[pathname] ?? "Workspace";
   const roleLabel = getRoleProfile(role).label.toUpperCase();
   const displayName = profile?.full_name ?? "CHIARA User";
+  const compactName = getCompactName(displayName);
   const displayEmail = profile?.email ?? "";
   const initials = getInitials(displayName);
   const canSeeSettings = canAccessPath(role, "/settings");
@@ -192,28 +201,28 @@ export function DashboardHeader({
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-[linear-gradient(180deg,#f6f7ef_0%,#ffffff_72%)] backdrop-blur">
-      <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 lg:hidden"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 lg:hidden"
             onClick={onOpenSidebar}
             aria-label="Open sidebar"
           >
             <FaBars className="h-4 w-4" />
           </button>
 
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">CHIARA Workspace</p>
-            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-xl">{pageTitle}</h1>
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 sm:block">CHIARA Workspace</p>
+            <h1 className="truncate text-base font-bold text-slate-900 sm:text-xl">{pageTitle}</h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="relative" ref={notifMenuRef}>
             <button
               type="button"
-              className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-teal-200 hover:text-teal-700"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-teal-200 hover:text-teal-700 sm:h-12 sm:w-12"
               aria-label="Notifications"
               onClick={() => {
                 if (!isNotifOpen) {
@@ -225,7 +234,7 @@ export function DashboardHeader({
             >
               <FaBell className="h-4 w-4" />
               {notifCount > 0 ? (
-                <span className="absolute right-2 top-2 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                <span className="absolute right-1.5 top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white sm:right-2 sm:top-2">
                   {Math.min(notifCount, 9)}
                 </span>
               ) : null}
@@ -284,29 +293,35 @@ export function DashboardHeader({
           <div className="relative" ref={profileMenuRef}>
             <button
               type="button"
-              className="flex min-w-0 items-center gap-3 rounded-[1.75rem] border-2 border-slate-900 bg-white px-3 py-2 pr-4 text-left shadow-sm transition hover:border-teal-700 hover:shadow-md"
+              className="flex min-w-0 max-w-[12rem] items-center gap-2 rounded-[1.4rem] border-2 border-slate-900 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:border-teal-700 hover:shadow-md sm:max-w-none sm:gap-3 sm:rounded-[1.75rem] sm:px-3 sm:py-2 sm:pr-4"
               onClick={() => {
                 setIsMenuOpen((current) => !current);
                 setIsNotifOpen(false);
               }}
               aria-label="Open account menu"
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 border-slate-900 bg-[radial-gradient(circle_at_top,#163b7a_0%,#0f2147_80%)] text-sm font-bold text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-[3px] border-slate-900 bg-[radial-gradient(circle_at_top,#163b7a_0%,#0f2147_80%)] text-xs font-bold text-white sm:h-11 sm:w-11 sm:border-4 sm:text-sm">
                 {initials}
               </div>
 
-              <div className="min-w-0">
+              <div className="hidden min-w-0 sm:block">
                 <p className="truncate text-sm font-extrabold uppercase tracking-[0.04em] text-slate-900">
                   {displayName}
                 </p>
                 <p className="truncate text-[11px] uppercase tracking-[0.18em] text-slate-500">{roleLabel}</p>
               </div>
 
+              <div className="min-w-0 sm:hidden">
+                <p className="max-w-[4.75rem] truncate text-[11px] font-extrabold uppercase tracking-[0.03em] text-slate-900">
+                  {compactName}
+                </p>
+              </div>
+
               <FaChevronDown className={`h-3 w-3 shrink-0 text-slate-500 transition ${isMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {isMenuOpen ? (
-              <div className="absolute right-0 mt-3 w-[18rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
+              <div className="absolute right-0 mt-3 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
                 <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
                   <p className="truncate text-sm font-bold uppercase tracking-[0.04em] text-slate-900">{displayName}</p>
                   <p className="truncate text-xs text-slate-500">{displayEmail}</p>

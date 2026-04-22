@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
+import { assertEmailNotProtectedPatient } from "@/src/lib/auth/protected-accounts";
 import type {
   Appointment as V2Appointment,
   ApptStatus,
@@ -59,6 +60,7 @@ export async function findOrCreatePatientByEmail(
   full_name: string,
   phone: string,
 ): Promise<string> {
+  assertEmailNotProtectedPatient(email);
   const supabase = getSupabaseAdmin();
 
   const { data: existing } = await supabase
@@ -95,9 +97,11 @@ function deriveLegacyStatus(v2: V2Appointment): AppointmentStatus {
   if (v2.appointment_type === "Online") {
     if (v2.status === "PendingPayment") return "Pending Payment";
     if (v2.status === "Completed") return "Completed";
+    if (v2.status === "InProgress") return "In Progress";
     return "Paid";
   }
   if (v2.status === "Completed") return "Completed";
+  if (v2.status === "InProgress") return "In Progress";
   return "Confirmed";
 }
 

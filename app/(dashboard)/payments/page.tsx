@@ -5,6 +5,7 @@ import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorFees } from "@/src/components/clinic/useDoctorFees";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import { formatDisplayDate, formatRange, getDoctorById } from "@/src/lib/appointments";
+import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
 
 type OnlinePaymentMethod = "QR" | "Card" | "BankTransfer";
 
@@ -27,7 +28,6 @@ function peso(amount: number) {
 export default function OnlinePaymentPage() {
   const { accessToken } = useRole();
   const { appointments, isLoading, error } = useAppointments();
-  const { fees } = useDoctorFees();
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<OnlinePaymentMethod>("QR");
   const [payments, setPayments] = useState<OnlinePaymentRecord[]>([]);
@@ -56,7 +56,11 @@ export default function OnlinePaymentPage() {
 
   const selectedAppointment =
     pendingAppointments.find((appointment) => appointment.id === selectedAppointmentId) ?? null;
+  const { fees } = useDoctorFees(selectedAppointment?.doctorId ?? "chiara-punzalan");
   const selectedPayment = selectedAppointment ? latestPaymentByAppointment.get(selectedAppointment.id) ?? null : null;
+  const selectedAmountDue = selectedAppointment
+    ? calculateConsultationCharge(fees.online, selectedAppointment.start, selectedAppointment.end)
+    : fees.online;
   const paidCount = payments.filter((payment) => payment.status === "Paid").length;
   const pendingCount = payments.filter((payment) => payment.status === "Pending").length;
   const failedCount = payments.filter((payment) => payment.status === "Failed").length;
@@ -310,7 +314,8 @@ export default function OnlinePaymentPage() {
                   {formatDisplayDate(selectedAppointment.date)} · {formatRange(selectedAppointment.start, selectedAppointment.end)}
                 </p>
                 <p className="text-sm text-slate-600">
-                  Amount due: <span className="font-semibold text-emerald-700">{peso(fees.online)}</span>
+                  Amount due: <span className="font-semibold text-emerald-700">{peso(selectedAmountDue)}</span>
+                  <span className="ml-2 text-slate-500">({formatDurationLabel(selectedAppointment.start, selectedAppointment.end)})</span>
                 </p>
               </div>
             ) : (
@@ -385,7 +390,7 @@ export default function OnlinePaymentPage() {
 
                     <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
                       <p>Method: <span className="font-medium text-slate-900">{formatMethod(payment?.method)}</span></p>
-                      <p>Amount: <span className="font-medium text-slate-900">{peso(payment?.amount ?? fees.online)}</span></p>
+                      <p>Amount: <span className="font-medium text-slate-900">{peso(payment?.amount ?? calculateConsultationCharge(fees.online, appointment.start, appointment.end))}</span></p>
                       <p>Meeting Link: <span className="font-medium text-slate-900">{appointment.meetingLink ? "Ready" : "Locked"}</span></p>
                     </div>
                   </div>

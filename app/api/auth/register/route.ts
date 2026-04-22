@@ -4,6 +4,7 @@ import {
   validatePatientRegistrationFields,
   type PatientRegistrationFields,
 } from "@/src/lib/patient-registration";
+import { isProtectedSuperAdminEmail } from "@/src/lib/auth/protected-accounts";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type RegisterPayload = PatientRegistrationFields & {
@@ -33,6 +34,9 @@ function assertRegisterPayload(payload: unknown): RegisterPayload {
   const validationError = validatePatientRegistrationFields(fields);
   if (validationError) {
     throw new HttpError(400, validationError);
+  }
+  if (isProtectedSuperAdminEmail(fields.email)) {
+    throw new HttpError(400, "This email is reserved for the super admin account.");
   }
 
   return {

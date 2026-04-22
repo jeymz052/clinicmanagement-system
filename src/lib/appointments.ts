@@ -2,6 +2,7 @@ export type AppointmentType = "Clinic" | "Online";
 
 export type AppointmentStatus =
   | "Confirmed"
+  | "In Progress"
   | "Paid"
   | "Pending Payment"
   | "Completed";
