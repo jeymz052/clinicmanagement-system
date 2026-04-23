@@ -1,4 +1,4 @@
-  "use client";
+"use client";
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { createAppointmentAction } from "@/app/(dashboard)/appointments/actions";
@@ -46,7 +46,7 @@ const INITIAL_FORM: BookingForm = {
 };
 
 export default function BookAppointmentPage() {
-  const { accessToken } = useRole();
+  const { accessToken, role, user, profile } = useRole();
   const { appointments, setAppointments, isLoading, error } = useAppointments();
   const { doctors } = useDoctors();
   const [formData, setFormData] = useState<BookingForm>(INITIAL_FORM);
@@ -98,9 +98,27 @@ export default function BookAppointmentPage() {
   const weekDates = useMemo(() => getWeekDates(calendarWeekStart), [calendarWeekStart]);
   const [activeStep, setActiveStep] = useState(1);
 
+  const patientDefaults = useMemo(
+    () => ({
+      patientName:
+        profile?.full_name?.trim() ||
+        user?.user_metadata?.full_name ||
+        "",
+      email: profile?.email || user?.email || "",
+      phone: profile?.phone || "",
+    }),
+    [profile, user],
+  );
+  const effectivePatientName =
+    role === "PATIENT" ? formData.patientName || patientDefaults.patientName : formData.patientName;
+  const effectivePatientEmail =
+    role === "PATIENT" ? formData.email || patientDefaults.email : formData.email;
+  const effectivePatientPhone =
+    role === "PATIENT" ? formData.phone || patientDefaults.phone : formData.phone;
+
   const step1Valid = !!formData.type;
   const step2Valid =
-    !!formData.patientName.trim() && !!formData.email.trim() && !!formData.phone.trim();
+    !!effectivePatientName.trim() && !!effectivePatientEmail.trim() && !!effectivePatientPhone.trim();
   const datePicked = !!formData.date && !blockedReason;
   const step3Valid = datePicked && !!formData.start;
   const step4Done = step1Valid && step2Valid && step3Valid;
@@ -177,9 +195,9 @@ export default function BookAppointmentPage() {
 
     startSubmitTransition(async () => {
       const result = await createAppointmentAction(accessToken, {
-        patientName: formData.patientName,
-        email: formData.email,
-        phone: formData.phone,
+        patientName: effectivePatientName,
+        email: effectivePatientEmail,
+        phone: effectivePatientPhone,
         doctorId: formData.doctorId,
         date: formData.date,
         start: formData.start,
@@ -377,15 +395,15 @@ export default function BookAppointmentPage() {
                 <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Full name</label>
-                    <input type="text" value={formData.patientName} onChange={(e) => updateForm("patientName", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Juan Dela Cruz" autoComplete="name" />
+                    <input type="text" value={effectivePatientName} onChange={(e) => updateForm("patientName", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Juan Dela Cruz" autoComplete="name" />
                   </div>
                   <div>
                     <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Email</label>
-                    <input type="email" value={formData.email} onChange={(e) => updateForm("email", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="juan@email.com" autoComplete="email" />
+                    <input type="email" value={effectivePatientEmail} onChange={(e) => updateForm("email", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="juan@email.com" autoComplete="email" />
                   </div>
                   <div>
                     <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Phone</label>
-                    <input type="tel" value={formData.phone} onChange={(e) => updateForm("phone", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="+63 912 345 6789" autoComplete="tel" />
+                    <input type="tel" value={effectivePatientPhone} onChange={(e) => updateForm("phone", e.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="+63 912 345 6789" autoComplete="tel" />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Reason for visit</label>
@@ -526,8 +544,8 @@ export default function BookAppointmentPage() {
                 <div className="space-y-3 rounded-[1.75rem] border border-emerald-100 bg-emerald-50/50 p-5 shadow-sm">
                   <SummaryRow label="Visit type" value={formData.type === "Clinic" ? "Clinic Visit" : "Online Consultation"} done />
                   <SummaryRow label="Doctor" value={selectedDoctor?.name ?? "-"} done />
-                  <SummaryRow label="Patient" value={formData.patientName} done={step2Valid} />
-                  <SummaryRow label="Contact" value={[formData.email, formData.phone].filter(Boolean).join(" | ") || "-"} done={step2Valid} />
+                  <SummaryRow label="Patient" value={effectivePatientName} done={step2Valid} />
+                  <SummaryRow label="Contact" value={[effectivePatientEmail, effectivePatientPhone].filter(Boolean).join(" | ") || "-"} done={step2Valid} />
                   {formData.reason ? <SummaryRow label="Reason" value={formData.reason} done /> : null}
                   <SummaryRow label="Date" value={formatDisplayDate(formData.date)} done={datePicked} />
                   <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "-"} done={step3Valid} />

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission } from "@/src/lib/auth/permissions";
 import { requireAuthenticatedUser } from "@/src/lib/auth/server-auth";
 import {
-  createPersistedAppointment,
+  createPersistedAppointmentWithContext,
   markAppointmentPaid,
   readAppointments,
   type AppointmentFilter,
@@ -83,7 +83,9 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json();
-  const result = await createPersistedAppointment(payload);
+  const result = await createPersistedAppointmentWithContext(payload, {
+    actor: authenticatedUser,
+  });
 
   if (!result.ok) {
     return NextResponse.json(

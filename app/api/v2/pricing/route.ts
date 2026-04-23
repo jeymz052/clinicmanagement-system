@@ -1,6 +1,10 @@
 import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
+function canManagePricing(role: string) {
+  return role === "super_admin" || role === "admin" || role === "secretary" || role === "doctor";
+}
+
 export async function GET(req: Request) {
   try {
     await requireActor(req);
@@ -20,10 +24,16 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const actor = await requireActor(req);
-    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
+    if (!canManagePricing(actor.profile.role)) {
+      throw new HttpError(403, "Only clinic staff can manage pricing.");
+    }
     const body = await req.json();
     if (!body.code || !body.name || !body.category || body.price == null)
       throw new HttpError(400, "code, name, category, price required");
+    const price = Number(body.price);
+    if (!Number.isFinite(price) || price < 0) {
+      throw new HttpError(400, "price must be a non-negative number");
+    }
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -32,7 +42,7 @@ export async function POST(req: Request) {
         code: body.code,
         name: body.name,
         category: body.category,
-        price: body.price,
+        price,
         is_active: body.is_active ?? true,
       })
       .select()

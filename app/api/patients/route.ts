@@ -27,7 +27,7 @@ function formatError(error: unknown) {
 
 export async function GET(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.read")) {
+  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json({ data: await readPatients() });

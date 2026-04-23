@@ -172,6 +172,11 @@ export default function LoginPage() {
         });
 
         if (error) {
+          if (/email.*confirm|confirm.*email|not confirmed/i.test(error.message)) {
+            setFeedback("Please verify your email before signing in.");
+            return;
+          }
+
           const nextAttempts = signInAttempts + 1;
           setSignInAttempts(nextAttempts);
           const attemptsLeft = Math.max(0, MAX_SIGNIN_ATTEMPTS - nextAttempts);
@@ -200,7 +205,7 @@ export default function LoginPage() {
         email: normalizedEmail,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/login`,
           data: {
             full_name: formData.fullName,
             phone: formData.phone,

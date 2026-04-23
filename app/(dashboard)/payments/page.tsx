@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorFees } from "@/src/components/clinic/useDoctorFees";
@@ -22,7 +23,7 @@ type OnlinePaymentRecord = {
 };
 
 function peso(amount: number) {
-  return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `PHP ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function OnlinePaymentPage() {
@@ -151,22 +152,14 @@ export default function OnlinePaymentPage() {
           }),
         });
 
-        const payload = (await intentRes.json().catch(() => ({}))) as { payment?: OnlinePaymentRecord; message?: string };
+        const payload = (await intentRes.json().catch(() => ({}))) as { message?: string };
         if (!intentRes.ok) {
           setFeedback({ message: payload.message ?? "Failed to create payment request.", tone: "error" });
           return;
         }
 
         await refreshPayments();
-        setFeedback({
-          message:
-            selectedMethod === "Card"
-              ? "Card payment request created. Appointment remains unconfirmed until payment is marked paid."
-              : selectedMethod === "QR"
-                ? "QR payment request created. Appointment remains unconfirmed until payment is marked paid."
-                : "Bank transfer request created. Appointment remains unconfirmed until payment is marked paid.",
-          tone: "success",
-        });
+        setFeedback({ message: "Payment request created.", tone: "success" });
       } catch (e) {
         setFeedback({ message: e instanceof Error ? e.message : "Payment request failed.", tone: "error" });
       }
@@ -193,10 +186,7 @@ export default function OnlinePaymentPage() {
 
       await refreshPayments();
       setFeedback({
-        message:
-          nextStatus === "Paid"
-            ? "Payment marked paid. The online consultation is now confirmed."
-            : "Payment marked failed. The appointment stays unconfirmed until a paid payment exists.",
+        message: nextStatus === "Paid" ? "Payment marked paid." : "Payment marked failed.",
         tone: "success",
       });
     });
@@ -208,10 +198,7 @@ export default function OnlinePaymentPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Payment System</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight">Online consultation payments only</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/90">
-              Payment applies only to online consultations. If not paid, the appointment is not confirmed and the meeting link stays unavailable.
-            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">Online Payments</h1>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -221,10 +208,6 @@ export default function OnlinePaymentPage() {
           </div>
         </div>
       </section>
-
-      <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800 shadow-sm">
-        Rule: if payment is not marked <span className="font-semibold">Paid</span>, the online consultation stays <span className="font-semibold">not confirmed</span>.
-      </div>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -242,13 +225,10 @@ export default function OnlinePaymentPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Online Payment Flow</p>
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Online Payment</p>
           <h2 className="mt-2 text-xl font-bold text-slate-900">Create and process payment</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Supported online options: QR payment, card payment, and optional bank transfer.
-          </p>
 
           <div className="mt-6">
             <label className="block text-sm font-medium text-slate-700">
@@ -273,21 +253,9 @@ export default function OnlinePaymentPage() {
 
           <div className="mt-6 grid gap-3 md:grid-cols-3">
             {[
-              {
-                value: "QR",
-                title: "QR Payment",
-                note: "GCash / local equivalent",
-              },
-              {
-                value: "Card",
-                title: "Card Payment",
-                note: "Stripe / card checkout",
-              },
-              {
-                value: "BankTransfer",
-                title: "Bank Transfer",
-                note: "Optional / manual",
-              },
+              { value: "QR", title: "QR Payment" },
+              { value: "Card", title: "Card Payment" },
+              { value: "BankTransfer", title: "Bank Transfer" },
             ].map((option) => (
               <button
                 key={option.value}
@@ -300,7 +268,6 @@ export default function OnlinePaymentPage() {
                 }`}
               >
                 <p className="text-sm font-bold text-slate-900">{option.title}</p>
-                <p className="mt-1 text-xs text-slate-500">{option.note}</p>
               </button>
             ))}
           </div>
@@ -311,15 +278,15 @@ export default function OnlinePaymentPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Consultation</p>
                 <p className="text-lg font-bold text-slate-900">{selectedAppointment.patientName}</p>
                 <p className="text-sm text-slate-600">
-                  {formatDisplayDate(selectedAppointment.date)} · {formatRange(selectedAppointment.start, selectedAppointment.end)}
+                  {formatDisplayDate(selectedAppointment.date)} | {formatRange(selectedAppointment.start, selectedAppointment.end)}
                 </p>
                 <p className="text-sm text-slate-600">
                   Amount due: <span className="font-semibold text-emerald-700">{peso(selectedAmountDue)}</span>
-                  <span className="ml-2 text-slate-500">({formatDurationLabel(selectedAppointment.start, selectedAppointment.end)})</span>
                 </p>
+                <p className="text-sm text-slate-500">{formatDurationLabel(selectedAppointment.start, selectedAppointment.end)}</p>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Select a pending online consultation to start the payment flow.</p>
+              <p className="text-sm text-slate-500">Select a consultation to continue.</p>
             )}
           </div>
 
@@ -354,56 +321,64 @@ export default function OnlinePaymentPage() {
               </>
             ) : null}
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status Board</p>
-          <h2 className="mt-2 text-xl font-bold text-slate-900">Online payment statuses</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Appointment confirmation depends on the latest payment status for the online consultation.
-          </p>
+        <div className="space-y-6">
+          <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status Board</p>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">Online payment statuses</h2>
 
-          <div className="mt-6 space-y-4">
-            {onlineAppointments.length > 0 ? (
-              onlineAppointments.map((appointment) => {
-                const payment = latestPaymentByAppointment.get(appointment.id) ?? null;
-                const doctor = getDoctorById(appointment.doctorId);
+            <div className="mt-6 space-y-4">
+              {onlineAppointments.length > 0 ? (
+                onlineAppointments.map((appointment) => {
+                  const payment = latestPaymentByAppointment.get(appointment.id) ?? null;
+                  const doctor = getDoctorById(appointment.doctorId);
 
-                return (
-                  <div key={appointment.id} className="rounded-[1.5rem] border border-emerald-100 bg-white p-4 shadow-sm transition hover:bg-emerald-50/30">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">{appointment.patientName}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {doctor?.name} · {formatDisplayDate(appointment.date)} · {formatRange(appointment.start, appointment.end)}
-                        </p>
-                      </div>
+                  return (
+                    <div key={appointment.id} className="rounded-[1.5rem] border border-emerald-100 bg-white p-4 shadow-sm transition hover:bg-emerald-50/30">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{appointment.patientName}</p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {doctor?.name} | {formatDisplayDate(appointment.date)} | {formatRange(appointment.start, appointment.end)}
+                          </p>
+                        </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <Badge tone={payment?.status ?? "Pending"} label={`Payment: ${payment?.status ?? "Not Started"}`} />
-                        <Badge
-                          tone={appointment.status === "Confirmed" || appointment.status === "Paid" ? "Paid" : "Pending"}
-                          label={`Appointment: ${appointment.status}`}
-                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Badge tone={payment?.status ?? "Pending"} label={`Payment: ${payment?.status ?? "Not Started"}`} />
+                          <Badge
+                            tone={appointment.status === "Confirmed" || appointment.status === "Paid" ? "Paid" : "Pending"}
+                            label={`Appointment: ${appointment.status}`}
+                          />
+                        </div>
                       </div>
                     </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-[1.5rem] border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
+                  No online consultations found yet.
+                </div>
+              )}
+            </div>
+          </section>
 
-                    <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
-                      <p>Method: <span className="font-medium text-slate-900">{formatMethod(payment?.method)}</span></p>
-                      <p>Amount: <span className="font-medium text-slate-900">{peso(payment?.amount ?? calculateConsultationCharge(fees.online, appointment.start, appointment.end))}</span></p>
-                      <p>Meeting Link: <span className="font-medium text-slate-900">{appointment.meetingLink ? "Ready" : "Locked"}</span></p>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="rounded-[1.5rem] border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
-                No online consultations found yet.
+          <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Payment History</p>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">Open history module</h2>
               </div>
-            )}
-          </div>
-        </section>
-      </div>
+              <Link
+                href="/payments/history"
+                className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5"
+              >
+                View Payment History
+              </Link>
+            </div>
+          </section>
+        </div>
+      </section>
     </div>
   );
 }
@@ -426,11 +401,4 @@ function Badge({ tone, label }: { tone: "Pending" | "Paid" | "Failed"; label: st
         : "bg-amber-50 text-amber-700";
 
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
-}
-
-function formatMethod(method?: OnlinePaymentMethod) {
-  if (method === "QR") return "QR Payment";
-  if (method === "BankTransfer") return "Bank Transfer";
-  if (method === "Card") return "Card Payment";
-  return "No payment yet";
 }

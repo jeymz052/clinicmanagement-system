@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import { HttpError, type Actor, isStaff } from "@/src/lib/http";
 import type {
   Billing,
+  BillingStatus,
   BillingItem,
   Payment,
   PaymentMethod,
@@ -16,6 +17,8 @@ export type BillingItemInput = {
   quantity: number;
   unit_price: number;
 };
+
+const ALLOWED_BILLING_STATUSES = new Set<BillingStatus>(["Draft", "Issued", "Paid", "Void"]);
 
 const POS_ALLOWED_CATEGORIES = new Set(["Consultation", "Lab", "Medicine"]);
 const POS_ALLOWED_METHODS = new Set<PaymentMethod>(["Cash", "Card", "BankTransfer"]);
@@ -204,4 +207,84 @@ export async function getBilling(id: string, actor: Actor) {
   if (actor.profile.role === "patient" && b.patient_id !== actor.id)
     throw new HttpError(403, "Forbidden");
   return b;
+}
+
+export async function updateBilling(
+  id: string,
+  input: {
+    discount?: number;
+    tax?: number;
+    status?: BillingStatus;
+    items?: BillingItemInput[];
+  },
+  actor: Actor,
+) {
+  if (!isStaff(actor.profile.role) && actor.profile.role !== "doctor") {
+    throw new HttpError(403, "Forbidden");
+  }
+
+  const current = await getBilling(id, actor);
+  const supabase = getSupabaseAdmin();
+
+  const nextItems = (input.items ?? current.billing_items).map((item) => {
+    const description = item.description.trim();
+    const quantity = Number(item.quantity);
+    const unitPrice = Number(item.unit_price);
+
+    if (!description) throw new HttpError(400, "Each billing item needs a description.");
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new HttpError(400, "Quantity must be greater than zero.");
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new HttpError(400, "Unit price must be zero or greater.");
+    }
+
+    return {
+      pricing_id: "pricing_id" in item ? item.pricing_id ?? null : null,
+      description,
+      quantity,
+      unit_price: unitPrice,
+    };
+  });
+
+  const discount = input.discount != null ? Number(input.discount) : Number(current.discount);
+  const tax = input.tax != null ? Number(input.tax) : Number(current.tax);
+  if (!Number.isFinite(discount) || discount < 0) throw new HttpError(400, "Discount must be zero or greater.");
+  if (!Number.isFinite(tax) || tax < 0) throw new HttpError(400, "Tax must be zero or greater.");
+
+  const status = input.status ?? current.status;
+  if (!ALLOWED_BILLING_STATUSES.has(status)) {
+    throw new HttpError(400, "Invalid billing status.");
+  }
+
+  const subtotal = nextItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+
+  const { error: updateError } = await supabase
+    .from("billings")
+    .update({
+      subtotal,
+      discount,
+      tax,
+      status,
+    })
+    .eq("id", id);
+  if (updateError) throw updateError;
+
+  if (input.items) {
+    const { error: deleteError } = await supabase.from("billing_items").delete().eq("billing_id", id);
+    if (deleteError) throw deleteError;
+
+    const { error: insertError } = await supabase.from("billing_items").insert(
+      nextItems.map((item) => ({
+        billing_id: id,
+        pricing_id: item.pricing_id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
+    );
+    if (insertError) throw insertError;
+  }
+
+  return getBilling(id, actor);
 }

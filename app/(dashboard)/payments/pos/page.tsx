@@ -250,11 +250,7 @@ export default function POSBillingPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Clinic POS / Billing System</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight">Front-desk billing for clinic appointments only</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/90">
-              Generate the bill after consultation, add consultation, lab, and medicine services, accept cash,
-              transfer, or card payment, and open the receipt right away.
-            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">POS Billing</h1>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -264,12 +260,6 @@ export default function POSBillingPage() {
           </div>
         </div>
       </section>
-
-      {!canUse ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Read-only view. Only clinic staff can generate bills and accept POS payments.
-        </div>
-      ) : null}
 
       {feedback ? (
         <div
@@ -290,7 +280,6 @@ export default function POSBillingPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 1</p>
                 <h2 className="mt-2 text-xl font-bold text-slate-900">Select completed clinic consultation</h2>
-                <p className="mt-1 text-sm text-slate-500">Only completed clinic appointments can be billed in this POS screen.</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -332,22 +321,10 @@ export default function POSBillingPage() {
                     </p>
                   </>
                 ) : (
-                  <div className="text-sm text-slate-500">
-                    {pendingClinicAppointments.length > 0
-                      ? "Booked clinic appointments are detected, but POS only unlocks them after the consultation is marked completed."
-                      : "Pick an appointment to load the patient and start building the clinic bill."}
-                  </div>
+                  <div className="text-sm text-slate-500">Pick an appointment to start billing.</div>
                 )}
               </div>
             </div>
-
-            {billableAppointments.length === 0 && pendingClinicAppointments.length > 0 ? (
-              <div className="mt-4 rounded-[1.4rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {pendingClinicAppointments.length} clinic appointment(s) exist, but they are still{" "}
-                {pendingClinicAppointments.map((appt) => appt.status).filter((value, index, all) => all.indexOf(value) === index).join(" / ")}.
-                POS billing only allows appointments after the doctor marks the visit as completed in the consultation flow.
-              </div>
-            ) : null}
           </section>
 
           <section className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
@@ -355,7 +332,6 @@ export default function POSBillingPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 2</p>
                 <h2 className="mt-2 text-xl font-bold text-slate-900">Add clinic services</h2>
-                <p className="mt-1 text-sm text-slate-500">This POS is locked to Consultation, Lab, and Medicine catalog items only.</p>
               </div>
             </div>
 
@@ -511,7 +487,6 @@ export default function POSBillingPage() {
             <div className="border-b border-emerald-200 px-6 py-5">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">POS Terminal</p>
               <h2 className="mt-2 text-2xl font-bold">Clinic Billing</h2>
-              <p className="mt-2 text-sm text-slate-600">Review the cart, generate the bill, accept payment, and open the printable receipt.</p>
             </div>
 
             <div className="space-y-5 px-6 py-6">
@@ -640,7 +615,7 @@ export default function POSBillingPage() {
                       href={`/payments/receipt/${issuedBillingId}`}
                       className="block w-full rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 transition hover:bg-emerald-50"
                     >
-                      Open Receipt
+                      View Receipt
                     </Link>
                     <button
                       type="button"
@@ -652,17 +627,6 @@ export default function POSBillingPage() {
                   </>
                 )}
               </div>
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">POS / Billing Rules</p>
-            <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <Rule text="Applies only to clinic appointments." />
-              <Rule text="Generate the bill after the consultation is completed." />
-              <Rule text="Only Consultation, Lab, and Medicine services are allowed in this POS." />
-              <Rule text="Accepted payment modes on this screen are cash, transfer, and card." />
-              <Rule text="Receipt becomes available after the bill is issued." />
             </div>
           </section>
         </div>
@@ -684,15 +648,6 @@ function StatTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-[1.5rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">{label}</p>
       <p className="mt-2 text-sm font-bold text-white">{value}</p>
-    </div>
-  );
-}
-
-function Rule({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-      <span className="mt-1 h-2.5 w-2.5 rounded-full bg-teal-500" />
-      <p>{text}</p>
     </div>
   );
 }

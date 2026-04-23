@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import type { Appointment as V2Appointment } from "@/src/lib/db/types";
+import type { AuthenticatedUser } from "@/src/lib/auth/server-auth";
 import type {
   AppointmentRecord,
   AppointmentType,
@@ -30,6 +31,10 @@ export type AppointmentCreatePayload = {
   start: string;
   type: AppointmentType;
   reason: string;
+};
+
+type AppointmentCreateContext = {
+  actor?: AuthenticatedUser;
 };
 
 export type AppointmentUpdatePayload = AppointmentCreatePayload & { id: string };
@@ -251,14 +256,43 @@ export async function writeAppointments() {
 }
 
 export async function createPersistedAppointment(payload: AppointmentCreatePayload) {
+  return createPersistedAppointmentWithContext(payload);
+}
+
+export async function createPersistedAppointmentWithContext(
+  payload: AppointmentCreatePayload,
+  context: AppointmentCreateContext = {},
+) {
   const supabase = getSupabaseAdmin();
   try {
     const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
-    const patientUuid = await findOrCreatePatientByEmail(
-      payload.email,
-      payload.patientName,
-      payload.phone,
-    );
+    let patientUuid: string;
+
+    if (context.actor?.role === "PATIENT") {
+      patientUuid = context.actor.user.id;
+
+      await supabase
+        .from("profiles")
+        .update({
+          full_name: payload.patientName,
+          phone: payload.phone,
+          role: "patient",
+          is_active: true,
+        })
+        .eq("id", patientUuid);
+
+      await supabase
+        .from("patients")
+        .upsert({
+          id: patientUuid,
+        });
+    } else {
+      patientUuid = await findOrCreatePatientByEmail(
+        payload.email,
+        payload.patientName,
+        payload.phone,
+      );
+    }
 
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
@@ -296,14 +330,19 @@ export async function createPersistedAppointment(payload: AppointmentCreatePaylo
         ? "Appointment reserved. Complete payment to confirm your online consultation."
         : "Appointment booked successfully.",
       appointment,
-      appointments: await readAppointments(),
+      appointments: context.actor?.role === "PATIENT"
+        ? await readAppointments({ patientId: patientUuid })
+        : await readAppointments(),
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Booking failed";
     return {
       ok: false as const,
       message,
-      appointments: await readAppointments(),
+      appointments:
+        context.actor?.role === "PATIENT"
+          ? await readAppointments({ patientId: context.actor.user.id })
+          : await readAppointments(),
     };
   }
 }

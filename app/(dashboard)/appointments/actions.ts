@@ -3,7 +3,7 @@
 import { hasPermission } from "@/src/lib/auth/permissions";
 import { requireAuthenticatedUser } from "@/src/lib/auth/server-auth";
 import {
-  createPersistedAppointment,
+  createPersistedAppointmentWithContext,
   deletePersistedAppointment,
   markAppointmentPaid,
   markClinicAppointmentComplete,
@@ -31,7 +31,9 @@ export async function createAppointmentAction(
     return unauthorized("You are not allowed to create appointments.");
   }
 
-  return createPersistedAppointment(payload);
+  return createPersistedAppointmentWithContext(payload, {
+    actor: authenticatedUser,
+  });
 }
 
 export async function updateAppointmentAction(

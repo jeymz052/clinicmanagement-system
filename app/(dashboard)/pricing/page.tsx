@@ -42,7 +42,7 @@ const EMPTY_DRAFT: Draft = {
 const CATEGORIES: PricingCategory[] = ["Consultation", "Lab", "Medicine", "Procedure", "Other"];
 
 function peso(value: number) {
-  return `₱${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `PHP ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function PricingPage() {
@@ -58,7 +58,7 @@ export default function PricingPage() {
   const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [isSaving, startTransition] = useTransition();
 
-  const canEdit = role === "SUPER_ADMIN";
+  const canEdit = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
   const primaryDoctor = rates[0] ?? null;
 
   useEffect(() => {
@@ -225,8 +225,23 @@ export default function PricingPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Pricing Management</p>
         <h1 className="mt-3 text-3xl font-bold text-slate-900">Consultation rates and service pricing</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          Manage the dedicated online and clinic consultation hourly rates, plus the rest of your service catalog, from one place.
+          Manage the dedicated clinic and online consultation rates, plus the service catalog used by online payments and clinic POS billing.
         </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <BusinessRuleCard
+          title="Online Consultation"
+          description="Payment is required first. The booking stays unconfirmed until the payment status becomes Paid."
+        />
+        <BusinessRuleCard
+          title="Clinic Appointment"
+          description="No upfront payment. Charges are collected only after consultation through the clinic POS workflow."
+        />
+        <BusinessRuleCard
+          title="Pricing CRUD"
+          description="Clinic staff can add, edit, and deactivate pricing so billing and payment totals stay aligned."
+        />
       </section>
 
       {feedback ? (
@@ -359,7 +374,7 @@ export default function PricingPage() {
 
       {canEdit ? (
         <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-slate-900 mb-4">Add New Service Pricing</h2>
+          <h2 className="mb-4 text-sm font-bold text-slate-900">Add New Service Pricing</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
             <input
               placeholder="Code (e.g. CONS-STD)"
@@ -529,6 +544,21 @@ export default function PricingPage() {
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+function BusinessRuleCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-emerald-100 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{title}</p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
     </div>
   );
 }

@@ -3,11 +3,15 @@ import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function canManageConsultationFees(role: string) {
+  return role === "super_admin" || role === "admin" || role === "secretary" || role === "doctor";
+}
+
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const actor = await requireActor(req);
-    if (actor.profile.role !== "super_admin") {
-      throw new HttpError(403, "Only Super Admin can update consultation fees.");
+    if (!canManageConsultationFees(actor.profile.role)) {
+      throw new HttpError(403, "Only clinic staff can update consultation fees.");
     }
 
     const { id } = await params;

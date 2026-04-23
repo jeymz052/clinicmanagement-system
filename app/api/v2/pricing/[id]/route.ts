@@ -3,17 +3,30 @@ import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function canManagePricing(role: string) {
+  return role === "super_admin" || role === "admin" || role === "secretary" || role === "doctor";
+}
+
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const actor = await requireActor(req);
-    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
+    if (!canManagePricing(actor.profile.role)) {
+      throw new HttpError(403, "Only clinic staff can manage pricing.");
+    }
     const { id } = await params;
     const body = await req.json();
+    const updates = {
+      ...body,
+      ...(body.price != null ? { price: Number(body.price) } : {}),
+    };
+    if (updates.price != null && (!Number.isFinite(updates.price) || updates.price < 0)) {
+      throw new HttpError(400, "price must be a non-negative number");
+    }
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("pricing")
-      .update(body)
+      .update(updates)
       .eq("id", id)
       .select()
       .single();
@@ -27,7 +40,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(req: Request, { params }: Ctx) {
   try {
     const actor = await requireActor(req);
-    if (actor.profile.role !== "super_admin") throw new HttpError(403, "Only Super Admin can manage pricing.");
+    if (!canManagePricing(actor.profile.role)) {
+      throw new HttpError(403, "Only clinic staff can manage pricing.");
+    }
     const { id } = await params;
 
     const supabase = getSupabaseAdmin();

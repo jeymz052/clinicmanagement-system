@@ -70,6 +70,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       subItems: [
         { label: "Online Payment", href: "/payments", icon: FaCreditCard },
         { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
+        { label: "Payment History", href: "/payments/history", icon: FaClockRotateLeft },
       ],
     },
     {
@@ -123,6 +124,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       subItems: [
         { label: "Online Payment", href: "/payments", icon: FaCreditCard },
         { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
+        { label: "Payment History", href: "/payments/history", icon: FaClockRotateLeft },
       ],
     },
     {
@@ -184,6 +186,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       subItems: [
         { label: "Online Payment", href: "/payments", icon: FaCreditCard },
         { label: "POS Billing", href: "/payments/pos", icon: FaFileLines },
+        { label: "Payment History", href: "/payments/history", icon: FaClockRotateLeft },
       ],
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
@@ -215,14 +218,12 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
       label: "Payments",
       href: "/payments",
       icon: FaCreditCard,
-      subItems: [{ label: "Pay Online", href: "/payments", icon: FaCreditCard }],
+      subItems: [
+        { label: "Pay Online", href: "/payments", icon: FaCreditCard },
+        { label: "Payment History", href: "/payments/history", icon: FaClockRotateLeft },
+      ],
     },
-    {
-      label: "Patients",
-      href: "/patients",
-      icon: FaUsers,
-      subItems: [{ label: "My Records", href: "/patients/records", icon: FaFileLines }],
-    },
+    { label: "My Records", href: "/patients/records", icon: FaFileLines },
   ],
 };
 

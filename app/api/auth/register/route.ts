@@ -50,31 +50,54 @@ export async function POST(req: Request) {
     const body = assertRegisterPayload(await req.json());
     const supabase = getSupabaseAdmin();
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, role, email")
-      .eq("id", body.userId)
-      .maybeSingle<{ id: string; role: string; email: string }>();
-
-    if (profileError) throw profileError;
-    if (!profile) throw new HttpError(404, "Newly created account was not found.");
-    if (profile.role !== "patient") {
-      throw new HttpError(400, "Only patient self-registration is supported here.");
+    const { data: authUser, error: authUserError } = await supabase.auth.admin.getUserById(body.userId);
+    if (authUserError) throw authUserError;
+    if (!authUser.user) {
+      throw new HttpError(404, "Newly created account was not found.");
     }
-    if (profile.email.toLowerCase() !== body.email) {
+
+    const authEmail = authUser.user.email?.trim().toLowerCase();
+    if (!authEmail) {
+      throw new HttpError(400, "Newly created account is missing an email address.");
+    }
+    if (authEmail !== body.email) {
       throw new HttpError(400, "Registration email does not match the created account.");
     }
 
-    const { error: updateProfileError } = await supabase
-      .from("profiles")
-      .update({
+    const existingAppMetadata =
+      authUser.user.app_metadata && typeof authUser.user.app_metadata === "object"
+        ? authUser.user.app_metadata
+        : {};
+    const existingUserMetadata =
+      authUser.user.user_metadata && typeof authUser.user.user_metadata === "object"
+        ? authUser.user.user_metadata
+        : {};
+
+    const { error: updateAuthError } = await supabase.auth.admin.updateUserById(body.userId, {
+      app_metadata: {
+        ...existingAppMetadata,
+        role: "patient",
+      },
+      user_metadata: {
+        ...existingUserMetadata,
         full_name: body.fullName,
         phone: body.phone,
-        role: "patient",
-        is_active: true,
-      })
-      .eq("id", body.userId);
-    if (updateProfileError) throw updateProfileError;
+        dob: body.dateOfBirth,
+        gender: body.gender,
+        address: body.address,
+      },
+    });
+    if (updateAuthError) throw updateAuthError;
+
+    const { error: upsertProfileError } = await supabase.from("profiles").upsert({
+      id: body.userId,
+      email: body.email,
+      full_name: body.fullName,
+      phone: body.phone,
+      role: "patient",
+      is_active: true,
+    });
+    if (upsertProfileError) throw upsertProfileError;
 
     const { error: upsertPatientError } = await supabase
       .from("patients")
