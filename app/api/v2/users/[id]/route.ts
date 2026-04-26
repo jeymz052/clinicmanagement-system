@@ -11,7 +11,7 @@ type UpdateUserBody = {
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const actor = await requireRole(req, ["super_admin"]);
+    const actor = await requireRole(req, ["super_admin", "doctor"]);
     const { id } = await ctx.params;
     if (!id) throw new HttpError(400, "Missing user id");
 

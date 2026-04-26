@@ -14,7 +14,7 @@ async function authenticate(request: Request) {
 
 export async function GET(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.read")) {
+  if (!auth || !hasPermission(auth.role, "settings.read")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json({ data: await readSystemSettings() });
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || auth.role !== "SUPER_ADMIN") {
+  if (!auth || !hasPermission(auth.role, "settings.read")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json({ data: await saveSystemSettings(await request.json()) });

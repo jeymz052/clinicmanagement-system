@@ -72,6 +72,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       start_time: body.start_time,
       end_time: body.end_time,
       slot_minutes: body.slot_minutes,
+      schedule_mode: body.schedule_mode,
       is_active: body.is_active,
     });
     return ok({ schedule });

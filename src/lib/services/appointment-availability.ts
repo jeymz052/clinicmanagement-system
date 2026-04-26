@@ -9,7 +9,7 @@ import {
 export type SharedAvailabilitySlot = {
   start: string;
   end: string;
-  mode: "Both";
+  mode: "Clinic" | "Online" | "Both";
   bookedCount: number;
   queueNumbers: number[];
   activeType: ApptType | null;
@@ -59,6 +59,10 @@ function getNextQueueNumber(queueNumbers: number[]) {
   return candidate <= 5 ? candidate : null;
 }
 
+function supportsType(mode: "Clinic" | "Online" | "Both", type: ApptType) {
+  return mode === "Both" || mode === type;
+}
+
 export async function buildSharedDayAvailability(
   doctorId: string,
   date: string,
@@ -79,47 +83,64 @@ export async function buildSharedDayAvailability(
     .select("id, start_time, end_time, appointment_type, queue_number, status")
     .eq("doctor_id", doctorId)
     .eq("appointment_date", date);
+  const reservationsQuery = supabase
+    .from("online_booking_reservations")
+    .select("id, start_time, end_time, queue_number, status")
+    .eq("doctor_id", doctorId)
+    .eq("appointment_date", date)
+    .in("status", ["Pending", "Paid"]);
 
   if (options.ignoreAppointmentId) {
     appointmentsQuery = appointmentsQuery.neq("id", options.ignoreAppointmentId);
   }
 
-  const [blocks, appointmentsResult] = await Promise.all([
+  const [blocks, appointmentsResult, reservationsResult] = await Promise.all([
     getUnavailabilityForDate(doctorId, date),
     appointmentsQuery,
+    reservationsQuery,
   ]);
 
   if (appointmentsResult.error) throw appointmentsResult.error;
+  if (reservationsResult.error) throw reservationsResult.error;
 
   const appointments = (appointmentsResult.data ?? []).filter(
     (row) => row.status !== "Cancelled" && row.status !== "NoShow",
   );
+  const reservations = reservationsResult.data ?? [];
 
   const slots = schedulableSlots.map(
     (slot): SharedAvailabilitySlot => {
       const overlapping = appointments
         .filter((row) => overlapsSlot(slot.start, slot.end, row.start_time, row.end_time))
         .sort((left, right) => left.queue_number - right.queue_number);
-      const queueNumbers = overlapping.map((row) => row.queue_number);
-      const activeType = overlapping[0]?.appointment_type ?? null;
+      const overlappingReservations = reservations
+        .filter((row) => overlapsSlot(slot.start, slot.end, row.start_time, row.end_time))
+        .sort((left, right) => left.queue_number - right.queue_number);
+      const queueNumbers = [
+        ...overlapping.map((row) => row.queue_number),
+        ...overlappingReservations.map((row) => row.queue_number),
+      ];
+      const activeType = overlapping[0]?.appointment_type ?? (overlappingReservations.length > 0 ? "Online" : null);
       const blocked = overlapsUnavailable(date, slot.start, slot.end, blocks);
       const nextQueueNumber = getNextQueueNumber(queueNumbers);
       const isFull = nextQueueNumber === null;
+      const scheduleSupportsType = supportsType(slot.mode, type);
       const typeConflict = activeType !== null && activeType !== type;
       const isPast = isPastInClinicTime(date, slot.start);
-      const availableForType = !isPast && !blocked && !typeConflict && !isFull;
+      const availableForType = !isPast && !blocked && scheduleSupportsType && !typeConflict && !isFull;
 
       let reason = "Available";
       if (isPast) reason = "Past time";
       else if (blocked) reason = blocked.reason ?? "Doctor unavailable";
+      else if (!scheduleSupportsType) reason = `${slot.mode} schedule only`;
       else if (typeConflict) reason = `${activeType} booking already occupies this shared slot`;
       else if (isFull) reason = "Max of 5 patients reached";
 
       return {
         start: slot.start.slice(0, 5),
         end: slot.end.slice(0, 5),
-        mode: "Both",
-        bookedCount: overlapping.length,
+        mode: slot.mode,
+        bookedCount: overlapping.length + overlappingReservations.length,
         queueNumbers,
         activeType,
         availableForType,

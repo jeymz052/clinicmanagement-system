@@ -26,6 +26,14 @@ const INITIAL_FORM: AuthForm = {
 
 const MAX_SIGNIN_ATTEMPTS = 5;
 const LOCK_MINUTES = 5;
+const RESET_COOLDOWN_SECONDS = 60;
+
+function getAuthEmailErrorMessage(message: string) {
+  if (/email rate limit exceeded|rate limit/i.test(message)) {
+    return "Supabase's built-in email sender is rate-limited right now. Wait a few minutes before retrying. If you have already requested several auth emails this hour, you may need to wait up to an hour.";
+  }
+  return message;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,6 +49,8 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AuthForm, string>>>({});
   const [signInAttempts, setSignInAttempts] = useState(0);
   const [lockUntil, setLockUntil] = useState<number | null>(null);
+  const [resetCooldownUntil, setResetCooldownUntil] = useState<number | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
   useEffect(() => {
     const message = new URLSearchParams(window.location.search).get("message");
@@ -51,9 +61,29 @@ export default function LoginPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!resetCooldownUntil) return;
+    if (resetCooldownUntil <= nowTs) return;
+
+    const timer = window.setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resetCooldownUntil, nowTs]);
+
+  const isResetCoolingDown = resetCooldownUntil != null && resetCooldownUntil > nowTs;
+
   function submitReset(event: React.FormEvent) {
     event.preventDefault();
     setResetFeedback(null);
+    const now = Date.now();
+    if (resetCooldownUntil && resetCooldownUntil > now) {
+      const secsLeft = Math.max(1, Math.ceil((resetCooldownUntil - now) / 1000));
+      setResetFeedback(`Please wait ${secsLeft} second(s) before requesting another reset email.`);
+      return;
+    }
+
     startTransition(async () => {
       try {
         const supabase = getSupabaseBrowserClient();
@@ -66,15 +96,16 @@ export default function LoginPage() {
           redirectTo: `${window.location.origin}/auth/reset`,
         });
         if (error) {
-          setResetFeedback(error.message);
+          setResetFeedback(getAuthEmailErrorMessage(error.message));
           return;
         }
+        setResetCooldownUntil(Date.now() + RESET_COOLDOWN_SECONDS * 1000);
         setResetFeedback(
           "If an account exists for that email, a password reset link has been sent.",
         );
       } catch (e) {
         setResetFeedback(
-          e instanceof Error ? e.message : "Failed to send reset email.",
+          e instanceof Error ? getAuthEmailErrorMessage(e.message) : "Failed to send reset email.",
         );
       }
     });
@@ -205,7 +236,7 @@ export default function LoginPage() {
         email: normalizedEmail,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/login`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/login&verified=1`,
           data: {
             full_name: formData.fullName,
             phone: formData.phone,
@@ -217,7 +248,7 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setFeedback(error.message);
+        setFeedback(getAuthEmailErrorMessage(error.message));
         return;
       }
 
@@ -461,6 +492,7 @@ export default function LoginPage() {
                   setShowReset(true);
                   setResetEmail(formData.email);
                   setResetFeedback(null);
+                  setResetCooldownUntil(null);
                 }}
               >
                 Forgot password?
@@ -583,12 +615,22 @@ export default function LoginPage() {
                 </div>
               ) : null}
 
+              {isResetCoolingDown ? (
+                <p className="text-[11px] text-white/70">
+                  For demo SMTP, wait about a minute before requesting another reset email.
+                </p>
+              ) : null}
+
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || isResetCoolingDown}
                 className="w-full rounded-lg bg-teal-600 px-3 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/30 transition hover:bg-teal-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-teal-800 disabled:text-teal-300"
               >
-                {isPending ? "Sending..." : "Send reset link"}
+                {isPending
+                  ? "Sending..."
+                  : isResetCoolingDown
+                    ? "Please wait..."
+                    : "Send reset link"}
               </button>
             </form>
           </div>

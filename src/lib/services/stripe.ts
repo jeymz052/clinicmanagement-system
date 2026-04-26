@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
-import type { Appointment, Payment } from "@/src/lib/db/types";
+import type { Appointment, OnlineBookingReservation, Payment } from "@/src/lib/db/types";
 import { HttpError } from "@/src/lib/http";
 import { formatDurationLabel } from "@/src/lib/consultation-pricing";
 
@@ -87,6 +87,45 @@ export async function createStripeCheckoutSession(input: {
   if (error) throw error;
 
   return { session, payment };
+}
+
+export async function createStripeCheckoutSessionForReservation(input: {
+  reservation: OnlineBookingReservation;
+  customerEmail: string;
+}): Promise<{ session: StripeCheckoutSession }> {
+  const key = requireKey();
+  const base = appUrl();
+
+  const body = new URLSearchParams();
+  body.set("mode", "payment");
+  body.set("success_url", `${base}/appointments/list?reservation_paid=${input.reservation.id}`);
+  body.set("cancel_url", `${base}/appointments/list?reservation_cancelled=${input.reservation.id}`);
+  body.set("customer_email", input.customerEmail);
+  body.set("client_reference_id", input.reservation.id);
+  body.set("line_items[0][quantity]", "1");
+  body.set("line_items[0][price_data][currency]", "php");
+  body.set("line_items[0][price_data][unit_amount]", String(Math.round(input.reservation.amount * 100)));
+  body.set(
+    "line_items[0][price_data][product_data][name]",
+    `Online Consultation (${formatDurationLabel(input.reservation.start_time, input.reservation.end_time)}) - ${input.reservation.appointment_date}`,
+  );
+  body.set("metadata[reservation_id]", input.reservation.id);
+
+  const res = await fetch(`${STRIPE_API}/checkout/sessions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new HttpError(500, `Stripe error: ${res.status} ${msg}`);
+  }
+
+  const session = (await res.json()) as StripeCheckoutSession;
+  return { session };
 }
 
 /**

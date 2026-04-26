@@ -4,6 +4,7 @@ import { isPastInClinicTime } from "@/src/lib/timezone";
 import type {
   DoctorSchedule,
   DoctorUnavailability,
+  ScheduleMode,
 } from "@/src/lib/db/types";
 import { HttpError } from "@/src/lib/http";
 
@@ -18,6 +19,7 @@ export type Slot = {
 export type SchedulableSlot = {
   start: string;
   end: string;
+  mode: ScheduleMode;
 };
 
 function dayOfWeek(dateStr: string) {
@@ -32,17 +34,44 @@ function addMinutes(time: string, minutes: number) {
   return `${hh}:${mm}:00`;
 }
 
-function expandSlots(start: string, end: string, minutes: number) {
-  const slots: { start: string; end: string }[] = [];
+function expandSlots(start: string, end: string, minutes: number, mode: ScheduleMode) {
+  const slots: { start: string; end: string; mode: ScheduleMode }[] = [];
   let cursor = start.length === 5 ? `${start}:00` : start;
   const stop = end.length === 5 ? `${end}:00` : end;
   while (cursor < stop) {
     const next = addMinutes(cursor, minutes);
     if (next > stop) break;
-    slots.push({ start: cursor, end: next });
+    slots.push({ start: cursor, end: next, mode });
     cursor = next;
   }
   return slots;
+}
+
+async function getClinicHours() {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("system_settings")
+    .select("clinic_open_time, clinic_close_time")
+    .eq("id", true)
+    .maybeSingle<{ clinic_open_time: string | null; clinic_close_time: string | null }>();
+  if (error) throw error;
+  return {
+    open: data?.clinic_open_time?.slice(0, 5) ?? "08:00",
+    close: data?.clinic_close_time?.slice(0, 5) ?? "17:00",
+  };
+}
+
+function normalizeClock(value: string) {
+  return value.slice(0, 5);
+}
+
+async function assertWithinClinicHours(start: string, end: string) {
+  const hours = await getClinicHours();
+  const normalizedStart = normalizeClock(start);
+  const normalizedEnd = normalizeClock(end);
+  if (normalizedStart < hours.open || normalizedEnd > hours.close) {
+    throw new HttpError(400, `Schedule must stay within clinic hours (${hours.open}-${hours.close}).`);
+  }
 }
 
 async function getDoctorTemplateKey(doctorId: string) {
@@ -70,18 +99,27 @@ export async function getSchedulableSlotsForDate(
   doctorId: string,
   date: string,
 ): Promise<SchedulableSlot[]> {
+  const clinicHours = await getClinicHours();
   const schedule = await getDoctorScheduleForDate(doctorId, date);
   if (schedule) {
-    return expandSlots(schedule.start_time, schedule.end_time, schedule.slot_minutes);
+    return expandSlots(
+      schedule.start_time,
+      schedule.end_time,
+      schedule.slot_minutes,
+      schedule.schedule_mode ?? "Both",
+    ).filter((slot) => normalizeClock(slot.start) >= clinicHours.open && normalizeClock(slot.end) <= clinicHours.close);
   }
 
   const templateKey = await getDoctorTemplateKey(doctorId);
   if (!templateKey) return [];
 
-  return (SLOT_TEMPLATES_BY_DOCTOR[templateKey] ?? []).map((slot) => ({
-    start: slot.start.length === 5 ? `${slot.start}:00` : slot.start,
-    end: slot.end.length === 5 ? `${slot.end}:00` : slot.end,
-  }));
+  return (SLOT_TEMPLATES_BY_DOCTOR[templateKey] ?? [])
+    .map((slot) => ({
+      start: slot.start.length === 5 ? `${slot.start}:00` : slot.start,
+      end: slot.end.length === 5 ? `${slot.end}:00` : slot.end,
+      mode: slot.mode,
+    }))
+    .filter((slot) => normalizeClock(slot.start) >= clinicHours.open && normalizeClock(slot.end) <= clinicHours.close);
 }
 
 export async function getDoctorScheduleForDate(
@@ -176,14 +214,41 @@ export async function upsertSchedule(input: {
   start_time: string;
   end_time: string;
   slot_minutes?: number;
+  schedule_mode?: ScheduleMode;
   is_active?: boolean;
 }) {
   if (input.day_of_week < 0 || input.day_of_week > 6)
     throw new HttpError(400, "day_of_week must be 0..6");
   if (input.start_time >= input.end_time)
     throw new HttpError(400, "start_time must be before end_time");
+  await assertWithinClinicHours(input.start_time, input.end_time);
 
   const supabase = getSupabaseAdmin();
+  const { data: existing, error: existingError } = await supabase
+    .from("doctor_schedules")
+    .select("id")
+    .eq("doctor_id", input.doctor_id)
+    .eq("day_of_week", input.day_of_week)
+    .maybeSingle<{ id: string }>();
+  if (existingError) throw existingError;
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("doctor_schedules")
+      .update({
+        start_time: input.start_time,
+        end_time: input.end_time,
+        slot_minutes: input.slot_minutes ?? 60,
+        schedule_mode: input.schedule_mode ?? "Both",
+        is_active: input.is_active ?? true,
+      })
+      .eq("id", existing.id)
+      .select()
+      .single<DoctorSchedule>();
+    if (error) throw error;
+    return data;
+  }
+
   const { data, error } = await supabase
     .from("doctor_schedules")
     .insert({
@@ -192,6 +257,7 @@ export async function upsertSchedule(input: {
       start_time: input.start_time,
       end_time: input.end_time,
       slot_minutes: input.slot_minutes ?? 60,
+      schedule_mode: input.schedule_mode ?? "Both",
       is_active: input.is_active ?? true,
     })
     .select()
@@ -212,6 +278,7 @@ export async function updateSchedule(
     start_time?: string;
     end_time?: string;
     slot_minutes?: number;
+    schedule_mode?: ScheduleMode;
     is_active?: boolean;
   },
 ) {
@@ -221,6 +288,9 @@ export async function updateSchedule(
     input.start_time >= input.end_time
   ) {
     throw new HttpError(400, "start_time must be before end_time");
+  }
+  if (input.start_time && input.end_time) {
+    await assertWithinClinicHours(input.start_time, input.end_time);
   }
 
   const supabase = getSupabaseAdmin();

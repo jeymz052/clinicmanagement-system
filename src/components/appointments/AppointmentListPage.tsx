@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState, useTransition } from "react";
 import {
+  approveClinicAppointmentAction,
   deleteAppointmentAction,
   markAppointmentPaidAction,
   updateAppointmentAction,
@@ -142,6 +143,19 @@ export default function AppointmentListPage({
     });
   }
 
+  function approveAppointment(appointmentId: string) {
+    if (!accessToken) {
+      setFeedback("Sign in again to continue.");
+      return;
+    }
+
+    startUpdateTransition(async () => {
+      const result = await approveClinicAppointmentAction(accessToken, appointmentId);
+      setAppointments(result.appointments);
+      setFeedback(result.message);
+    });
+  }
+
   return (
     <div className="space-y-6 pb-8">
       <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
@@ -161,7 +175,7 @@ export default function AppointmentListPage({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <SummaryCard label="Total" value={summary.total} tone="slate" />
         <SummaryCard label="Confirmed / Completed" value={summary.confirmedCount} tone="emerald" />
-        <SummaryCard label="Pending Payment" value={summary.pendingCount} tone="amber" />
+        <SummaryCard label="Pending Action" value={summary.pendingCount} tone="amber" />
         <SummaryCard label="Online" value={summary.onlineCount} tone="sky" />
       </div>
 
@@ -189,7 +203,15 @@ export default function AppointmentListPage({
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-semibold text-slate-900">{appointment.patientName}</h2>
                     <Badge tone={appointment.type === "Clinic" ? "emerald" : "sky"}>{appointment.type}</Badge>
-                    <Badge tone={appointment.status === "Pending Payment" ? "amber" : "emerald"}>{appointment.status}</Badge>
+                    <Badge
+                      tone={
+                        appointment.status === "Pending Payment" || appointment.status === "Pending Approval"
+                          ? "amber"
+                          : "emerald"
+                      }
+                    >
+                      {appointment.status}
+                    </Badge>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">
                     {doctor?.name ?? "Assigned doctor"} | {formatDisplayDate(appointment.date)} | {formatRange(appointment.start, appointment.end)} | Queue #{appointment.queueNumber}
@@ -201,6 +223,11 @@ export default function AppointmentListPage({
                   {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
                     <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">
                       Continue Payment
+                    </button>
+                  ) : null}
+                  {appointment.type === "Clinic" && appointment.status === "Pending Approval" && canManage ? (
+                    <button type="button" onClick={() => approveAppointment(appointment.id)} className="rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-600">
+                      Approve Appointment
                     </button>
                   ) : null}
                   {appointment.meetingLink ? (

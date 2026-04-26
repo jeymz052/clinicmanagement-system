@@ -5,6 +5,7 @@ import {
   type PatientRegistrationFields,
 } from "@/src/lib/patient-registration";
 import { isProtectedSuperAdminEmail } from "@/src/lib/auth/protected-accounts";
+import { enqueueNotification } from "@/src/lib/services/notification";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
 type RegisterPayload = PatientRegistrationFields & {
@@ -108,6 +109,13 @@ export async function POST(req: Request) {
         address: body.address,
       });
     if (upsertPatientError) throw upsertPatientError;
+
+    await enqueueNotification({
+      user_id: body.userId,
+      template: "welcome",
+      channels: ["email", "sms"],
+      payload: { full_name: body.fullName },
+    });
 
     return ok({ success: true }, 201);
   } catch (e) {

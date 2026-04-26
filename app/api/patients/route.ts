@@ -27,7 +27,7 @@ function formatError(error: unknown) {
 
 export async function GET(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+  if (!auth || !hasPermission(auth.role, "patients.manage")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json({ data: await readPatients() });
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const auth = await authenticate(request);
-    if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+    if (!auth || !hasPermission(auth.role, "patients.manage")) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.json({ data: await createPatient(await request.json()) });
@@ -46,9 +46,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  try {
+   try {
     const auth = await authenticate(request);
-    if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+    if (!auth || !hasPermission(auth.role, "patients.manage")) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.json({ data: await updatePatient(await request.json()) });
@@ -59,7 +59,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || !hasPermission(auth.role, "appointments.manage")) {
+  if (!auth || !hasPermission(auth.role, "patients.manage")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);

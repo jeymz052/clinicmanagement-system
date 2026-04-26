@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
+  const verified = requestUrl.searchParams.get("verified");
   const next = requestUrl.searchParams.get("next") ?? "/login";
   const redirectUrl = new URL(next, requestUrl.origin);
   const recoveryRedirectUrl = new URL("/auth/reset", requestUrl.origin);
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
       type: type as EmailOtpType,
     });
     error = result.error;
+  } else if (verified === "1") {
+    redirectUrl.searchParams.set("message", "Email verified. You can now sign in.");
+    return NextResponse.redirect(redirectUrl);
   } else {
     redirectUrl.searchParams.set(
       "message",

@@ -43,28 +43,30 @@ export async function sendEmail(input: EmailInput): Promise<void> {
 }
 
 export async function sendSms(input: SmsInput): Promise<void> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM;
+  const apiKey = process.env.SEMAPHORE_API_KEY;
+  const sender = process.env.SEMAPHORE_SENDER_NAME;
 
-  if (!accountSid || !authToken || !from) {
+  if (!apiKey) {
     console.log(`[sms:stub] to=${input.to} body="${input.body.slice(0, 60)}"`);
     return;
   }
 
-  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
-  const body = new URLSearchParams({ To: input.to, From: from, Body: input.body });
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+  const body = new URLSearchParams({
+    apikey: apiKey,
+    number: input.to,
+    message: input.body,
+    ...(sender ? { sendername: sender } : {}),
+  });
+  const res = await fetch("https://api.semaphore.co/api/v4/messages", {
     method: "POST",
     headers: {
-      Authorization: `Basic ${auth}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(`SMS send failed: ${res.status} ${msg}`);
+    throw new Error(`Semaphore SMS send failed: ${res.status} ${msg}`);
   }
 }
 
@@ -73,6 +75,7 @@ type TemplatePayload = Record<string, unknown>;
 export function renderTemplate(template: string, payload: TemplatePayload): { subject: string; body: string } {
   const appt = (payload.appointment_id as string)?.slice(0, 8) ?? "";
   const link = payload.meeting_link as string | undefined;
+  const type = payload.appointment_type as string | undefined;
 
   switch (template) {
     case "welcome":
@@ -80,10 +83,27 @@ export function renderTemplate(template: string, payload: TemplatePayload): { su
         subject: "Welcome to CHIARA Clinic",
         body: "Welcome! Your account is now active. You can book clinic visits and online consultations at any time.",
       };
+    case "appointment_booked":
+      return {
+        subject: "Your appointment booking was received",
+        body: `Your ${type?.toLowerCase() ?? "clinic"} appointment request (ref ${appt}) has been recorded.`,
+      };
     case "appointment_confirmed":
       return {
-        subject: "Your appointment is confirmed",
-        body: `Your clinic appointment (ref ${appt}) is confirmed. Please arrive 10 minutes before your slot.`,
+        subject: "Your appointment is approved",
+        body: `Your appointment (ref ${appt}) is approved and confirmed.${link ? ` Meeting link: ${link}` : ""}`,
+      };
+    case "appointment_payment_success":
+      return {
+        subject: "Payment successful",
+        body: `We received your payment for appointment ${appt}. Your online consultation is now secured.`,
+      };
+    case "online_meeting_link":
+      return {
+        subject: "Your online meeting link",
+        body: link
+          ? `Your meeting link for appointment ${appt} is ready: ${link}`
+          : `Your meeting link for appointment ${appt} is ready in your dashboard.`,
       };
     case "appointment_paid_and_confirmed":
       return {

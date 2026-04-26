@@ -30,7 +30,7 @@ function assertCreateBody(body: unknown): CreateUserBody {
 
 export async function GET(req: Request) {
   try {
-    await requireRole(req, ["super_admin"]);
+    await requireRole(req, ["super_admin", "doctor"]);
     const supabase = getSupabaseAdmin();
     const url = new URL(req.url);
     const q = url.searchParams.get("q")?.trim();
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const actor = await requireRole(req, ["super_admin"]);
+    const actor = await requireRole(req, ["super_admin", "doctor"]);
     const body = assertCreateBody(await req.json());
 
     const supabase = getSupabaseAdmin();

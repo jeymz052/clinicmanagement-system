@@ -66,6 +66,7 @@ export default function POSBillingPage() {
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const [discount, setDiscount] = useState<number>(0);
   const [tax, setTax] = useState<number>(0);
+  const [catalogQuery, setCatalogQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
   const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [issuedBillingId, setIssuedBillingId] = useState<string | null>(null);
@@ -123,6 +124,16 @@ export default function POSBillingPage() {
       })),
     [posPricing],
   );
+  const filteredCatalog = useMemo(() => {
+    const query = catalogQuery.trim().toLowerCase();
+    if (!query) return catalogByCategory;
+    return catalogByCategory.map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        [item.name, item.code, item.category].some((value) => value.toLowerCase().includes(query)),
+      ),
+    }));
+  }, [catalogByCategory, catalogQuery]);
 
   const validItems = lines.filter((line) => line.pricing_id && line.quantity > 0 && line.unit_price > 0);
   const consultationBaseFee = selectedAppt
@@ -336,7 +347,20 @@ export default function POSBillingPage() {
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              {catalogByCategory.map((group) => (
+              <div className="lg:col-span-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Catalog Search</span>
+                  <input
+                    type="search"
+                    value={catalogQuery}
+                    onChange={(event) => setCatalogQuery(event.target.value)}
+                    placeholder="Search consultation, lab, medicine, or item code"
+                    className="mt-2 w-full rounded-[1.25rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </label>
+              </div>
+
+              {filteredCatalog.map((group) => (
                 <div key={group.category} className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/30 p-4 shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-900">{group.category}</p>
@@ -407,16 +431,34 @@ export default function POSBillingPage() {
                     </div>
 
                     <div className="col-span-4 md:col-span-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.quantity}
-                        onChange={(event) =>
-                          updateLine(line.tempId, { quantity: Math.max(1, Number(event.target.value) || 1) })
-                        }
-                        disabled={!canUse || !!issuedBillingId}
-                        className="w-full rounded-[1rem] border border-emerald-100 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-                      />
+                      <div className="flex items-center rounded-[1rem] border border-emerald-100 bg-white">
+                        <button
+                          type="button"
+                          onClick={() => updateLine(line.tempId, { quantity: Math.max(1, line.quantity - 1) })}
+                          disabled={!canUse || !!issuedBillingId}
+                          className="px-3 py-2.5 text-sm font-bold text-slate-600 disabled:opacity-40"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          value={line.quantity}
+                          onChange={(event) =>
+                            updateLine(line.tempId, { quantity: Math.max(1, Number(event.target.value) || 1) })
+                          }
+                          disabled={!canUse || !!issuedBillingId}
+                          className="w-full border-x border-emerald-100 px-3 py-2.5 text-center text-sm outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateLine(line.tempId, { quantity: line.quantity + 1 })}
+                          disabled={!canUse || !!issuedBillingId}
+                          className="px-3 py-2.5 text-sm font-bold text-slate-600 disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
 
                     <div className="col-span-4 md:col-span-2">
@@ -497,10 +539,19 @@ export default function POSBillingPage() {
                     <p className="mt-2 text-lg font-semibold text-slate-900">{selectedAppt.patientName}</p>
                     <p className="mt-1 text-sm text-slate-600">{formatDisplayDate(selectedAppt.date)}</p>
                     <p className="mt-1 text-sm text-slate-500">{formatRange(selectedAppt.start, selectedAppt.end)}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      Queue #{selectedAppt.queueNumber} · {selectedAppt.type}
+                    </p>
                   </>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">No clinic appointment selected yet.</p>
                 )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <TerminalStat label="Lines" value={String(validItems.length)} />
+                <TerminalStat label="Qty" value={String(validItems.reduce((sum, line) => sum + line.quantity, 0))} />
+                <TerminalStat label="Tender" value={paymentMethod === "BankTransfer" ? "Transfer" : paymentMethod} />
               </div>
 
               <div className="space-y-3">
@@ -648,6 +699,15 @@ function StatTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-[1.5rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">{label}</p>
       <p className="mt-2 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function TerminalStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.25rem] border border-emerald-200 bg-white px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
   );
 }

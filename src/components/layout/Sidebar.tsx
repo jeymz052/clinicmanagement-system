@@ -138,10 +138,10 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
     { label: "Reports", href: "/reports", icon: FaChartLine },
-    { label: "Settings", href: "/settings", icon: FaGear },
   ],
   DOCTOR: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
+    { label: "Users", href: "/users", icon: FaUsers },
     {
       label: "Appointments",
       href: "/appointments",
@@ -195,7 +195,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   ],
   PATIENT: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
-    {
+   {
       label: "Appointments",
       href: "/appointments",
       icon: FaCalendarCheck,
@@ -203,15 +203,6 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
         { label: "Book Appointment", href: "/appointments", icon: FaCalendarPlus },
         { label: "My Appointments", href: "/appointments/my", icon: FaCalendarCheck },
         { label: "Calendar View", href: "/appointments/calendar", icon: FaCalendarDays },
-      ],
-    },
-    {
-      label: "Consultations",
-      href: "/consultations",
-      icon: FaRegMessage,
-      subItems: [
-        { label: "Online Consultation", href: "/consultations", icon: FaVideo },
-        { label: "Consultation History", href: "/consultations/history", icon: FaClockRotateLeft },
       ],
     },
     {

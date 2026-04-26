@@ -21,6 +21,7 @@ import {
 } from "@/src/lib/services/schedule";
 import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
 import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
+import { enqueueNotification } from "@/src/lib/services/notification";
 
 export type AppointmentCreatePayload = {
   patientName: string;
@@ -85,6 +86,10 @@ async function buildConflictHint(doctorUuid: string, date: string, type: Appoint
     : ` Next available: ${next.date} ${next.slot.start}-${next.slot.end}.`;
 }
 
+function supportsType(mode: "Clinic" | "Online" | "Both", type: AppointmentType) {
+  return mode === "Both" || mode === type;
+}
+
 function matchesExactSlot(
   slot: { start: string; end: string },
   start: string,
@@ -94,13 +99,14 @@ function matchesExactSlot(
     && normalizeTime(slot.end) === normalizeTime(end);
 }
 
-async function validateSharedSlotOrThrow(input: {
+export async function validateSharedSlotOrThrow(input: {
   doctorUuid: string;
   date: string;
   start_time: string;
   end_time: string;
   type: AppointmentType;
   ignoreAppointmentId?: string;
+  ignoreReservationId?: string;
 }) {
   const supabase = getSupabaseAdmin();
   const clinicToday = getClinicToday();
@@ -122,6 +128,9 @@ async function validateSharedSlotOrThrow(input: {
   if (!exactSlot) {
     throw new Error("Selected time is outside the doctor's working hours.");
   }
+  if (!supportsType(exactSlot.mode, input.type)) {
+    throw new Error(`${exactSlot.mode} schedule only.`);
+  }
 
   const blocks = await getUnavailabilityForDate(input.doctorUuid, input.date);
   if (overlapsBlocks(input.date, input.start_time, input.end_time, blocks)) {
@@ -142,29 +151,49 @@ async function validateSharedSlotOrThrow(input: {
   const { data: existing, error } = await query;
   if (error) throw error;
 
+  let reservationQuery = supabase
+    .from("online_booking_reservations")
+    .select("id, queue_number, status, start_time, end_time")
+    .eq("doctor_id", input.doctorUuid)
+    .eq("appointment_date", input.date)
+    .in("status", ["Pending", "Paid"]);
+  if (input.ignoreReservationId) {
+    reservationQuery = reservationQuery.neq("id", input.ignoreReservationId);
+  }
+  const { data: reservations, error: reservationError } = await reservationQuery;
+  if (reservationError) throw reservationError;
+
   const active = (existing ?? []).filter((row) =>
     legacyStatusMatchesLiving(row.status as V2Appointment["status"]),
   );
   const overlapping = active.filter((row) =>
     overlapsSlot(input.start_time, input.end_time, row.start_time, row.end_time),
   );
+  const overlappingReservations = (reservations ?? []).filter((row) =>
+    overlapsSlot(input.start_time, input.end_time, row.start_time, row.end_time),
+  );
 
   const conflictingType = overlapping.find(
     (row) => row.appointment_type !== input.type,
   );
-  if (conflictingType) {
+  const hasReservationConflict =
+    input.type === "Clinic" && overlappingReservations.length > 0;
+  if (conflictingType || hasReservationConflict) {
     const hint = await buildConflictHint(input.doctorUuid, input.date, input.type);
     throw new Error(
-      `${conflictingType.appointment_type} booking already occupies this shared slot.${hint}`,
+      `${conflictingType?.appointment_type ?? "Online"} booking already occupies this shared slot.${hint}`,
     );
   }
 
-  if (overlapping.length >= 5) {
+  if (overlapping.length + overlappingReservations.length >= 5) {
     const hint = await buildConflictHint(input.doctorUuid, input.date, input.type);
     throw new Error(`This slot is already full (max 5 patients).${hint}`);
   }
 
-  const used = new Set(overlapping.map((row) => row.queue_number as number));
+  const used = new Set([
+    ...overlapping.map((row) => row.queue_number as number),
+    ...overlappingReservations.map((row) => row.queue_number as number),
+  ]);
   let queueNumber = 1;
   while (queueNumber <= 5 && used.has(queueNumber)) queueNumber += 1;
   if (queueNumber > 5) {
@@ -172,6 +201,39 @@ async function validateSharedSlotOrThrow(input: {
   }
 
   return { queueNumber };
+}
+
+export async function resolveBookingPatientId(
+  payload: Pick<AppointmentCreatePayload, "email" | "patientName" | "phone">,
+  options: { actorRole?: AuthenticatedUser["role"]; actorUserId?: string } = {},
+) {
+  const supabase = getSupabaseAdmin();
+  if (options.actorRole === "PATIENT" && options.actorUserId) {
+    const patientUuid = options.actorUserId;
+    await supabase
+      .from("profiles")
+      .update({
+        full_name: payload.patientName,
+        phone: payload.phone,
+        role: "patient",
+        is_active: true,
+      })
+      .eq("id", patientUuid);
+
+    await supabase
+      .from("patients")
+      .upsert({
+        id: patientUuid,
+      });
+
+    return patientUuid;
+  }
+
+  return findOrCreatePatientByEmail(
+    payload.email,
+    payload.patientName,
+    payload.phone,
+  );
 }
 
 async function hydrateRows(rows: V2Appointment[]): Promise<AppointmentRecord[]> {
@@ -266,33 +328,14 @@ export async function createPersistedAppointmentWithContext(
   const supabase = getSupabaseAdmin();
   try {
     const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
-    let patientUuid: string;
-
-    if (context.actor?.role === "PATIENT") {
-      patientUuid = context.actor.user.id;
-
-      await supabase
-        .from("profiles")
-        .update({
-          full_name: payload.patientName,
-          phone: payload.phone,
-          role: "patient",
-          is_active: true,
-        })
-        .eq("id", patientUuid);
-
-      await supabase
-        .from("patients")
-        .upsert({
-          id: patientUuid,
-        });
-    } else {
-      patientUuid = await findOrCreatePatientByEmail(
-        payload.email,
-        payload.patientName,
-        payload.phone,
-      );
+    if (payload.type === "Online") {
+      throw new Error("Online consultations require payment first. Start checkout to confirm the slot.");
     }
+
+    const patientUuid = await resolveBookingPatientId(payload, {
+      actorRole: context.actor?.role,
+      actorUserId: context.actor?.user.id,
+    });
 
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
@@ -304,8 +347,6 @@ export async function createPersistedAppointmentWithContext(
       type: payload.type,
     });
 
-    const status = payload.type === "Online" ? "PendingPayment" : "Confirmed";
-
     const { data: inserted, error: insertErr } = await supabase
       .from("appointments")
       .insert({
@@ -316,19 +357,24 @@ export async function createPersistedAppointmentWithContext(
         end_time,
         appointment_type: payload.type,
         reason: payload.reason,
-        status,
+        status: "PendingApproval",
         queue_number: queueNumber,
       })
       .select()
       .single<V2Appointment>();
     if (insertErr) throw insertErr;
 
+    await enqueueNotification({
+      user_id: patientUuid,
+      template: "appointment_booked",
+      channels: ["email", "sms"],
+      payload: { appointment_id: inserted.id, appointment_type: payload.type },
+    });
+
     const appointment = (await hydrateRows([inserted]))[0];
     return {
       ok: true as const,
-      message: payload.type === "Online"
-        ? "Appointment reserved. Complete payment to confirm your online consultation."
-        : "Appointment booked successfully.",
+      message: payload.type === "Clinic" ? "Appointment booked and awaiting approval." : "Appointment booked successfully.",
       appointment,
       appointments: context.actor?.role === "PATIENT"
         ? await readAppointments({ patientId: patientUuid })
@@ -366,6 +412,13 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
     const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
+    if (payload.type === "Online" && existing.appointment_type !== "Online") {
+      return {
+        ok: false as const,
+        message: "Converting a clinic booking to online requires a new pay-first online booking.",
+        appointments: await readAppointments(),
+      };
+    }
     const { queueNumber } = await validateSharedSlotOrThrow({
       doctorUuid,
       date: payload.date,
@@ -382,7 +435,9 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
           : "PendingPayment"
         : existing.status === "Completed"
           ? "Completed"
-          : "Confirmed";
+          : existing.status === "Confirmed"
+            ? "Confirmed"
+            : "PendingApproval";
 
     const meeting_link = payload.type === "Online" ? existing.meeting_link : null;
 
@@ -427,6 +482,11 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
 
 export async function deletePersistedAppointment(appointmentId: string) {
   const supabase = getSupabaseAdmin();
+  const { data: appt } = await supabase
+    .from("appointments")
+    .select("id, patient_id")
+    .eq("id", appointmentId)
+    .maybeSingle<{ id: string; patient_id: string }>();
   const { error } = await supabase
     .from("appointments")
     .update({ status: "Cancelled" })
@@ -438,6 +498,16 @@ export async function deletePersistedAppointment(appointmentId: string) {
       appointments: await readAppointments(),
     };
   }
+
+  if (appt) {
+    await enqueueNotification({
+      user_id: appt.patient_id,
+      template: "appointment_cancelled",
+      channels: ["email", "sms"],
+      payload: { appointment_id: appointmentId },
+    });
+  }
+
   return {
     ok: true as const,
     message: "Appointment cancelled.",
@@ -505,11 +575,90 @@ export async function markAppointmentPaid(appointmentId: string) {
     .eq("id", appt.id);
   if (apptErr) throw apptErr;
 
+  await enqueueNotification({
+    user_id: appt.patient_id,
+    template: "appointment_confirmed",
+    channels: ["email", "sms"],
+    payload: { appointment_id: appt.id, meeting_link },
+  });
+  await enqueueNotification({
+    user_id: appt.patient_id,
+    template: "appointment_payment_success",
+    channels: ["email", "sms"],
+    payload: { appointment_id: appt.id, meeting_link },
+  });
+  await enqueueNotification({
+    user_id: appt.patient_id,
+    template: "online_meeting_link",
+    channels: ["email", "sms"],
+    payload: { appointment_id: appt.id, meeting_link },
+  });
+
   const appointments = await readAppointments();
   return {
     ok: true as const,
     message: "Payment confirmed and meeting link generated.",
     appointment: appointments.find((a) => a.id === appointmentId) ?? null,
+    appointments,
+  };
+}
+
+export async function approveClinicAppointment(appointmentId: string) {
+  const supabase = getSupabaseAdmin();
+  const { data: appt, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", appointmentId)
+    .single<V2Appointment>();
+  if (error || !appt) {
+    return {
+      ok: false as const,
+      message: "Appointment not found.",
+      appointments: await readAppointments(),
+    };
+  }
+  if (appt.appointment_type !== "Clinic") {
+    return {
+      ok: false as const,
+      message: "Only clinic appointments use manual approval.",
+      appointments: await readAppointments(),
+    };
+  }
+  if (appt.status === "Confirmed") {
+    const appointments = await readAppointments();
+    return {
+      ok: true as const,
+      message: "Appointment is already approved.",
+      appointment: appointments.find((item) => item.id === appointmentId) ?? null,
+      appointments,
+    };
+  }
+  if (appt.status !== "PendingApproval") {
+    return {
+      ok: false as const,
+      message: `Cannot approve appointment from status ${appt.status}.`,
+      appointments: await readAppointments(),
+    };
+  }
+
+  const { error: updateErr } = await supabase
+    .from("appointments")
+    .update({ status: "Confirmed" })
+    .eq("id", appt.id);
+  if (updateErr) throw updateErr;
+
+  await enqueueNotification({
+    user_id: appt.patient_id,
+    template: "appointment_confirmed",
+    channels: ["email", "sms"],
+    payload: { appointment_id: appt.id },
+  });
+
+  const appointments = await readAppointments();
+  return {
+    ok: true as const,
+    message: "Clinic appointment approved.",
+    appointment: appointments.find((item) => item.id === appointmentId) ?? null,
     appointments,
   };
 }

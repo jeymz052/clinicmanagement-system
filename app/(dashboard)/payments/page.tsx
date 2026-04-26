@@ -8,7 +8,7 @@ import { useRole } from "@/src/components/layout/RoleProvider";
 import { formatDisplayDate, formatRange, getDoctorById } from "@/src/lib/appointments";
 import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
 
-type OnlinePaymentMethod = "QR" | "Card" | "BankTransfer";
+type OnlinePaymentMethod = "GCash" | "QR" | "Card" | "BankTransfer";
 
 type OnlinePaymentRecord = {
   id: string;
@@ -121,14 +121,14 @@ export default function OnlinePaymentPage() {
 
     startTransition(async () => {
       try {
-        if (selectedMethod === "Card") {
+        if (selectedMethod === "Card" || selectedMethod === "GCash") {
           const checkoutRes = await fetch("/api/v2/payments/checkout", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({ appointment_id: selectedAppointment.id }),
+            body: JSON.stringify({ appointment_id: selectedAppointment.id, method: selectedMethod }),
           });
 
           if (checkoutRes.ok) {
@@ -253,7 +253,7 @@ export default function OnlinePaymentPage() {
 
           <div className="mt-6 grid gap-3 md:grid-cols-3">
             {[
-              { value: "QR", title: "QR Payment" },
+              { value: "GCash", title: "GCash / QR Payment" },
               { value: "Card", title: "Card Payment" },
               { value: "BankTransfer", title: "Bank Transfer" },
             ].map((option) => (
@@ -297,7 +297,7 @@ export default function OnlinePaymentPage() {
               disabled={isLoading || isSubmitting || !selectedAppointmentId}
               className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? "Processing..." : selectedMethod === "Card" ? "Start Card Payment" : "Create Payment Request"}
+              {isSubmitting ? "Processing..." : selectedMethod === "BankTransfer" ? "Create Payment Request" : `Start ${selectedMethod === "GCash" ? "GCash" : "Card"} Payment`}
             </button>
 
             {selectedPayment?.status === "Pending" ? (

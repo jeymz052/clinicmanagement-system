@@ -46,7 +46,17 @@ export async function DELETE(req: Request, { params }: Ctx) {
     const { id } = await params;
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("pricing").update({ is_active: false }).eq("id", id);
+    const { data: linkedItem } = await supabase
+      .from("billing_items")
+      .select("id")
+      .eq("pricing_id", id)
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (linkedItem) {
+      throw new HttpError(409, "Pricing already has billing history. Edit or deactivate it instead of deleting.");
+    }
+
+    const { error } = await supabase.from("pricing").delete().eq("id", id);
     if (error) throw error;
     return ok({ ok: true });
   } catch (e) {

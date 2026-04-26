@@ -175,7 +175,7 @@ export default function PricingPage() {
     });
   }
 
-  function deactivate(id: string) {
+  function deletePricing(id: string) {
     if (!accessToken) return;
     startTransition(async () => {
       const res = await fetch(`/api/v2/pricing/${id}`, {
@@ -183,12 +183,13 @@ export default function PricingPage() {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
-        setFeedback({ message: "Deactivate failed", tone: "error" });
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        setFeedback({ message: body.message ?? "Delete failed", tone: "error" });
         resetFeedback();
         return;
       }
-      setItems((current) => current.map((item) => (item.id === id ? { ...item, is_active: false } : item)));
-      setFeedback({ message: "Item deactivated.", tone: "success" });
+      setItems((current) => current.filter((item) => item.id !== id));
+      setFeedback({ message: "Pricing item deleted.", tone: "success" });
       resetFeedback();
     });
   }
@@ -240,7 +241,7 @@ export default function PricingPage() {
         />
         <BusinessRuleCard
           title="Pricing CRUD"
-          description="Clinic staff can add, edit, and deactivate pricing so billing and payment totals stay aligned."
+          description="Clinic staff can add, edit, and delete pricing while preserving billing history safeguards."
         />
       </section>
 
@@ -525,10 +526,10 @@ export default function PricingPage() {
                                 {item.is_active ? (
                                   <button
                                     type="button"
-                                    onClick={() => deactivate(item.id)}
+                                    onClick={() => deletePricing(item.id)}
                                     className="rounded border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
                                   >
-                                    Deactivate
+                                    Delete
                                   </button>
                                 ) : null}
                               </>

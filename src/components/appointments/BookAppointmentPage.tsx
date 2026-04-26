@@ -29,6 +29,7 @@ type BookingForm = {
   start: string;
   type: AppointmentType;
   reason: string;
+  durationMinutes: "60";
 };
 
 const today = getClinicToday();
@@ -43,6 +44,7 @@ const INITIAL_FORM: BookingForm = {
   start: "",
   type: "Clinic",
   reason: "",
+  durationMinutes: "60",
 };
 
 export default function BookAppointmentPage() {
@@ -158,7 +160,7 @@ export default function BookAppointmentPage() {
     setFeedback(null);
   }
 
-  async function redirectToPayment(appointmentId: string) {
+  async function redirectToPayment() {
     if (!accessToken) return;
 
     try {
@@ -168,7 +170,16 @@ export default function BookAppointmentPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ appointment_id: appointmentId }),
+        body: JSON.stringify({
+          patientName: effectivePatientName,
+          email: effectivePatientEmail,
+          phone: effectivePatientPhone,
+          doctorId: formData.doctorId,
+          date: formData.date,
+          start: formData.start,
+          reason: formData.reason,
+          type: "Online",
+        }),
       });
 
       if (checkoutRes.ok) {
@@ -182,7 +193,7 @@ export default function BookAppointmentPage() {
       // Fall through to the local payments page when checkout URL is unavailable.
     }
 
-    window.location.href = `/payments?appointmentId=${appointmentId}`;
+    window.location.href = "/payments";
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -194,6 +205,15 @@ export default function BookAppointmentPage() {
     }
 
     startSubmitTransition(async () => {
+      if (formData.type === "Online") {
+        setFeedback({
+          message: "Redirecting to payment. Your appointment will be created and confirmed right after payment succeeds.",
+          type: "success",
+        });
+        await redirectToPayment();
+        return;
+      }
+
       const result = await createAppointmentAction(accessToken, {
         patientName: effectivePatientName,
         email: effectivePatientEmail,
@@ -212,20 +232,11 @@ export default function BookAppointmentPage() {
         return;
       }
 
-      if (formData.type === "Online") {
-        setFeedback({
-          message: "Online consultation reserved. Redirecting to payment so we can confirm the slot and generate your meeting link.",
-          type: "success",
-        });
-        await redirectToPayment(result.appointment.id);
-        return;
-      }
-
       setFormData({ ...INITIAL_FORM, type: formData.type, doctorId: formData.doctorId });
       setVisibleWeekStart(today);
       setActiveStep(1);
       setFeedback({
-        message: `Booked! ${result.appointment.patientName} with ${selectedDoctor?.name ?? "doctor"} on ${formatDisplayDate(result.appointment.date)} at ${formatRange(result.appointment.start, result.appointment.end)}. Queue #${result.appointment.queueNumber}.`,
+        message: `Booked! ${result.appointment.patientName} with ${selectedDoctor?.name ?? "doctor"} on ${formatDisplayDate(result.appointment.date)} at ${formatRange(result.appointment.start, result.appointment.end)}. Queue #${result.appointment.queueNumber}.${formData.type === "Clinic" ? " Clinic appointments now wait for approval." : ""}`,
         type: "success",
       });
     });
@@ -246,7 +257,7 @@ export default function BookAppointmentPage() {
             <StatCard label="Total" value={summary.total} color="slate" />
             <StatCard label="Clinic" value={summary.clinicCount} color="teal" />
             <StatCard label="Online" value={summary.onlineCount} color="sky" />
-            <StatCard label="Pending Payment" value={summary.pendingCount} color="amber" />
+            <StatCard label="Pending Action" value={summary.pendingCount} color="amber" />
           </div>
         </div>
       </div>
@@ -347,15 +358,19 @@ export default function BookAppointmentPage() {
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                   <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm">
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Assigned doctor</label>
-                    <div className="mt-3 rounded-[1.4rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] px-4 py-4">
-                      <p className="text-base font-semibold text-slate-900">
-                        Dra. Chiara C. Punzalan M.D.
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        General Medicine
-                      </p>
-                    </div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Select doctor</label>
+                    <select
+                      value={formData.doctorId}
+                      onChange={(event) => updateForm("doctorId", event.target.value)}
+                      className="mt-3 w-full rounded-[1.4rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] px-4 py-4 text-base font-semibold text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    >
+                      {doctors.map((doctor) => (
+                        <option key={doctor.slug} value={doctor.slug}>
+                          {doctor.name} - {doctor.specialty}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-sm text-slate-500">Choose doctor, date, and time before confirming your visit.</p>
                   </div>
 
                   <div className="rounded-[1.75rem] border border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#dcfce7_100%)] p-5 shadow-sm">
@@ -372,6 +387,18 @@ export default function BookAppointmentPage() {
                         <p className="mt-2 text-lg font-semibold text-slate-900">PHP {fees.online.toLocaleString()}</p>
                       </div>
                     </div>
+                    {formData.type === "Online" ? (
+                      <div className="mt-4 rounded-[1.2rem] border border-white/70 bg-white/80 px-3 py-3 shadow-sm">
+                        <label className="text-slate-500">Select duration</label>
+                        <select
+                          value={formData.durationMinutes}
+                          onChange={(event) => updateForm("durationMinutes", event.target.value as "60")}
+                          className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                        >
+                          <option value="60">60 minutes</option>
+                        </select>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -519,7 +546,7 @@ export default function BookAppointmentPage() {
                       <SummaryRow label="Time" value={selectedSlot ? formatRange(selectedSlot.start, selectedSlot.end) : "Choose a slot"} done={!!selectedSlot} />
                       <SummaryRow label="Duration" value={selectedSlot ? selectedSlotDuration : "Select a slot"} done={!!selectedSlot} />
                       <SummaryRow label="Queue #" value={selectedSlot?.nextQueueNumber ? String(selectedSlot.nextQueueNumber) : "Will appear after slot selection"} done={!!selectedSlot} />
-                      <SummaryRow label="Payment" value={formData.type === "Clinic" ? "Pay after consultation" : "Pay now to confirm"} done />
+                      <SummaryRow label="Payment" value={formData.type === "Clinic" ? "Pay after consultation" : "Pay first, then appointment is created"} done />
                     </div>
                   </div>
                   <div className="mt-4 rounded-[1.4rem] border border-emerald-100 bg-white px-4 py-4 shadow-sm">
@@ -552,6 +579,7 @@ export default function BookAppointmentPage() {
                   <SummaryRow label="Duration" value={selectedSlot ? selectedSlotDuration : "-"} done={step3Valid} />
                   {selectedSlot ? <SummaryRow label="Queue #" value={String(selectedSlot.nextQueueNumber)} done /> : null}
                   <SummaryRow label={formData.type === "Online" ? "Fee (pay now)" : "Fee (pay after)"} value={`PHP ${estimatedFee.toLocaleString()}`} done />
+                  {formData.type === "Online" ? <SummaryRow label="Selected duration" value={`${formData.durationMinutes} minutes`} done /> : null}
                 </div>
                 <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Ready to book</p>
@@ -579,7 +607,7 @@ export default function BookAppointmentPage() {
                     Reset
                   </button>
                   <button type="submit" disabled={isLoading || isSubmitting || !step4Done} className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_16px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-60">
-                    {isSubmitting ? "Booking..." : formData.type === "Online" ? "Reserve Slot & Pay Now" : "Confirm Booking"}
+                    {isSubmitting ? "Booking..." : formData.type === "Online" ? "Pay First & Confirm Online Consultation" : "Request Clinic Booking"}
                   </button>
                 </div>
               </div>

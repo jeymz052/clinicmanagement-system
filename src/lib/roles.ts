@@ -28,7 +28,7 @@ export const ROLE_PROFILES: RoleProfile[] = [
     role: "DOCTOR",
     label: "Doctor",
     shortLabel: "DR",
-    description: "Appointments, schedules, consultation notes, and online consults",
+    description: "Clinical workflows plus full admin access and system configuration",
   },
   {
     role: "PATIENT",
@@ -60,7 +60,7 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   },
   {
     prefixes: ["/users"],
-    allowedRoles: ["SUPER_ADMIN"],
+    allowedRoles: ["SUPER_ADMIN", "DOCTOR"],
   },
   {
     prefixes: ["/appointments"],
@@ -76,7 +76,7 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   },
   {
     prefixes: ["/patients/add"],
-    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
+     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
   },
   {
     prefixes: ["/patients/records"],
@@ -86,13 +86,13 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     prefixes: ["/patients"],
     allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
   },
-  {
+   {
     prefixes: ["/consultations"],
-    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+      allowedRoles: ["SUPER_ADMIN", "DOCTOR"],
   },
   {
     prefixes: ["/schedules"],
-    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
+    allowedRoles: ["SUPER_ADMIN", "DOCTOR"],
   },
   {
     prefixes: ["/reports", "/help", "/pricing"],
@@ -100,7 +100,7 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   },
   {
     prefixes: ["/settings"],
-    allowedRoles: ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
+    allowedRoles: ["SUPER_ADMIN", "DOCTOR"],
   },
 ];
 

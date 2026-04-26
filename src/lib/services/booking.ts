@@ -4,10 +4,9 @@ import type { Appointment, ApptType, Doctor } from "@/src/lib/db/types";
 import { getClinicToday, isPastInClinicTime } from "@/src/lib/timezone";
 import {
   getSchedulableSlotsForDate,
-  getAvailability,
-  suggestNextSlot,
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
+import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
 import { enqueueNotification } from "@/src/lib/services/notification";
 
 export type BookingInput = {
@@ -53,6 +52,10 @@ function normalizeTime(time: string) {
   return time.length === 5 ? `${time}:00` : time;
 }
 
+function supportsType(mode: "Clinic" | "Online" | "Both", type: ApptType) {
+  return mode === "Both" || mode === type;
+}
+
 function overlapsSlot(
   startA: string,
   endA: string,
@@ -86,10 +89,23 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
   }
 
   const supabase = getSupabaseAdmin();
+  if (input.appointment_type === "Online") {
+    throw new HttpError(
+      400,
+      "Online consultations require payment first. Use the checkout flow to confirm the slot.",
+    );
+  }
 
   const schedulableSlots = await getSchedulableSlotsForDate(input.doctor_id, input.appointment_date);
   if (schedulableSlots.length === 0) throw new HttpError(409, "Doctor is not working that day");
   assertMatchesSchedulableSlot(schedulableSlots, input.start_time, input.end_time);
+  const exactSlot = schedulableSlots.find(
+    (slot) => normalizeTime(slot.start) === normalizeTime(input.start_time)
+      && normalizeTime(slot.end) === normalizeTime(input.end_time),
+  );
+  if (!exactSlot || !supportsType(exactSlot.mode, input.appointment_type)) {
+    throw new HttpError(409, `${exactSlot?.mode ?? "Clinic"} schedule only`);
+  }
 
   const blocks = await getUnavailabilityForDate(input.doctor_id, input.appointment_date);
   if (overlapsBlocks(input.appointment_date, input.start_time, input.end_time, blocks))
@@ -102,43 +118,60 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
     .eq("appointment_date", input.appointment_date);
   if (existingError) throw existingError;
 
+  const { data: reservations, error: reservationError } = await supabase
+    .from("online_booking_reservations")
+    .select("queue_number, status, start_time, end_time")
+    .eq("doctor_id", input.doctor_id)
+    .eq("appointment_date", input.appointment_date)
+    .in("status", ["Pending", "Paid"]);
+  if (reservationError) throw reservationError;
+
   const active = (existing ?? []).filter(
     (r) => r.status !== "Cancelled" && r.status !== "NoShow",
   );
+  const pendingReservations = reservations ?? [];
 
   const overlapping = active.filter((r) =>
+    overlapsSlot(input.start_time, input.end_time, r.start_time, r.end_time),
+  );
+  const overlappingReservations = pendingReservations.filter((r) =>
     overlapsSlot(input.start_time, input.end_time, r.start_time, r.end_time),
   );
   const conflictingType = overlapping.find(
     (r) => r.appointment_type !== input.appointment_type,
   );
-  if (conflictingType) {
-    const availability = await getAvailability(input.doctor_id, input.appointment_date);
-    const next = suggestNextSlot(availability);
-    const hint = next
-      ? ` Next available: ${next.start.slice(0, 5)}-${next.end.slice(0, 5)}.`
-      : "";
+  if (conflictingType || overlappingReservations.length > 0) {
+    const next = await findNextAvailableSharedSlot(
+      input.doctor_id,
+      input.appointment_date,
+      input.appointment_type,
+      14,
+    );
+    const hint = next ? ` Next available: ${next.date} ${next.slot.start}-${next.slot.end}.` : "";
     throw new HttpError(
       409,
-      `Slot conflict: ${conflictingType.appointment_type} booking already exists for this shared time slot.${hint}`,
+      `Slot conflict: ${(conflictingType?.appointment_type ?? "Online")} booking already exists for this shared time slot.${hint}`,
     );
   }
 
-  if (overlapping.length >= 5) {
-    const availability = await getAvailability(input.doctor_id, input.appointment_date);
-    const next = suggestNextSlot(availability);
-    const hint = next
-      ? ` Next available: ${next.start.slice(0, 5)}-${next.end.slice(0, 5)}.`
-      : "";
+  if (overlapping.length + overlappingReservations.length >= 5) {
+    const next = await findNextAvailableSharedSlot(
+      input.doctor_id,
+      input.appointment_date,
+      input.appointment_type,
+      14,
+    );
+    const hint = next ? ` Next available: ${next.date} ${next.slot.start}-${next.slot.end}.` : "";
     throw new HttpError(409, `Slot is full (max 5/hour).${hint}`);
   }
 
-  const used = new Set(overlapping.map((r) => r.queue_number));
+  const used = new Set([
+    ...overlapping.map((r) => r.queue_number),
+    ...overlappingReservations.map((r) => r.queue_number),
+  ]);
   let queue_number = 1;
   while (queue_number <= 5 && used.has(queue_number)) queue_number++;
   if (queue_number > 5) throw new HttpError(409, "Slot is full");
-
-  const status = input.appointment_type === "Online" ? "PendingPayment" : "Confirmed";
 
   const { data: inserted, error } = await supabase
     .from("appointments")
@@ -150,21 +183,19 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
       end_time: input.end_time,
       appointment_type: input.appointment_type,
       reason: input.reason ?? "",
-      status,
+      status: "PendingApproval",
       queue_number,
     })
     .select()
     .single<Appointment>();
   if (error) throw error;
 
-  if (input.appointment_type === "Clinic") {
-    await enqueueNotification({
-      user_id: input.patient_id,
-      template: "appointment_confirmed",
-      channels: ["email", "sms"],
-      payload: { appointment_id: inserted.id },
-    });
-  }
+  await enqueueNotification({
+    user_id: input.patient_id,
+    template: "appointment_booked",
+    channels: ["email", "sms"],
+    payload: { appointment_id: inserted.id, appointment_type: input.appointment_type },
+  });
 
   return inserted;
 }
@@ -231,6 +262,8 @@ export async function startConsultation(id: string, actor: Actor) {
     throw new HttpError(403, "Not your appointment");
   if (appt.status === "PendingPayment")
     throw new HttpError(400, "Cannot start — online payment not confirmed");
+  if (appt.status === "PendingApproval")
+    throw new HttpError(400, "Cannot start until the appointment is approved");
   if (appt.status !== "Confirmed")
     throw new HttpError(400, `Cannot start from status ${appt.status}`);
 
@@ -262,6 +295,33 @@ export async function completeConsultation(id: string, actor: Actor) {
     .select()
     .single<Appointment>();
   if (error) throw error;
+  return data;
+}
+
+export async function approveAppointment(id: string, actor: Actor) {
+  if (actor.profile.role !== "doctor" && !isStaff(actor.profile.role))
+    throw new HttpError(403, "Only clinic staff can approve appointments");
+  const appt = await getAppointment(id);
+  if (appt.appointment_type !== "Clinic")
+    throw new HttpError(400, "Only clinic appointments require approval");
+  if (appt.status !== "PendingApproval")
+    throw new HttpError(400, `Cannot approve from status ${appt.status}`);
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ status: "Confirmed" })
+    .eq("id", id)
+    .select()
+    .single<Appointment>();
+  if (error) throw error;
+
+  await enqueueNotification({
+    user_id: appt.patient_id,
+    template: "appointment_confirmed",
+    channels: ["email", "sms"],
+    payload: { appointment_id: id },
+  });
   return data;
 }
 

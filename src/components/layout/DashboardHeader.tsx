@@ -26,7 +26,7 @@ type ProfileShape = {
 
 type NotificationItem = {
   id: string;
-  channel: "email" | "sms";
+  channels: Array<"email" | "sms">;
   template: string;
   status: "queued" | "sent" | "failed";
   created_at: string;
@@ -103,10 +103,15 @@ function mapTemplateToLabel(template: string) {
   switch (template) {
     case "welcome":
       return "Registration";
+    case "appointment_booked":
+      return "Appointment Booking";
     case "appointment_confirmed":
       return "Appointment Approval";
+    case "appointment_payment_success":
     case "appointment_paid_and_confirmed":
       return "Payment Success";
+    case "online_meeting_link":
+      return "Online Meeting Link";
     case "appointment_payment_failed":
       return "Payment Issue";
     case "appointment_reminder_24h":
@@ -120,6 +125,11 @@ function mapTemplateToLabel(template: string) {
     default:
       return "Notification";
   }
+}
+
+function formatChannels(channels: Array<"email" | "sms">) {
+  if (channels.length === 0) return "in-app";
+  return channels.join(" + ");
 }
 
 export function DashboardHeader({
@@ -244,7 +254,8 @@ export function DashboardHeader({
             {isNotifOpen ? (
               <div className="absolute right-0 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
                 <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
-                  <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                  <p className="text-sm font-semibold text-slate-900">Notification Center</p>
+                  <p className="mt-1 text-xs text-slate-500">In-app updates for your account activity.</p>
                 </div>
 
                 <div className="max-h-[24rem] overflow-y-auto">
@@ -271,7 +282,7 @@ export function DashboardHeader({
                               <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.body}</p>
                             </div>
                             <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                              {item.channel}
+                              {formatChannels(item.channels)}
                             </span>
                           </div>
                           <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">

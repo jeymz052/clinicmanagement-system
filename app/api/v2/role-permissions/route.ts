@@ -27,6 +27,8 @@ function defaultPermissions(): RolePermissions {
       add_consultation_notes: true,
       start_online_consultation: true,
       full_admin_access: true,
+      manage_roles_permissions: true,
+      system_configuration: true,
       handle_pos_billing: true,
     },
     secretary: {
@@ -66,7 +68,7 @@ async function writePermissionsFile(payload: RolePermissions) {
 
 export async function GET(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || auth.role !== "SUPER_ADMIN") {
+  if (!auth || (auth.role !== "SUPER_ADMIN" && auth.role !== "DOCTOR")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const rolePermissions = await readPermissionsFile();
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const auth = await authenticate(request);
-  if (!auth || auth.role !== "SUPER_ADMIN") {
+  if (!auth || (auth.role !== "SUPER_ADMIN" && auth.role !== "DOCTOR")) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 

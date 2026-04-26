@@ -1,9 +1,13 @@
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import type { NotificationChannel } from "@/src/lib/db/types";
+import { processDueNotifications } from "@/src/lib/services/notification-dispatch";
 
 export type NotifyTemplate =
   | "welcome"
+  | "appointment_booked"
   | "appointment_confirmed"
+  | "appointment_payment_success"
+  | "online_meeting_link"
   | "appointment_paid_and_confirmed"
   | "appointment_payment_failed"
   | "appointment_reminder_24h"
@@ -30,4 +34,17 @@ export async function enqueueNotification(input: {
   }));
   const { error } = await supabase.from("notifications").insert(rows);
   if (error) throw error;
+
+  const latestSendAt = rows.reduce(
+    (latest, row) => (row.send_at > latest ? row.send_at : latest),
+    rows[0]?.send_at ?? "",
+  );
+
+  if (latestSendAt && latestSendAt <= new Date().toISOString()) {
+    try {
+      await processDueNotifications();
+    } catch (dispatchError) {
+      console.error("[notifications] auto-dispatch failed", dispatchError);
+    }
+  }
 }

@@ -19,8 +19,16 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
+  create type schedule_mode as enum ('Clinic','Online','Both');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
   create type appt_status as enum
-    ('PendingPayment','Confirmed','InProgress','Completed','Cancelled','NoShow');
+    ('PendingApproval','PendingPayment','Confirmed','InProgress','Completed','Cancelled','NoShow');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter type appt_status add value if not exists 'PendingApproval' before 'PendingPayment';
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -71,6 +79,7 @@ create table if not exists public.doctor_schedules (
   start_time time not null,
   end_time time not null,
   slot_minutes smallint not null default 60,
+  schedule_mode schedule_mode not null default 'Both',
   is_active boolean not null default true,
   check (start_time < end_time)
 );
@@ -127,6 +136,43 @@ do $$ begin
       slot_range with &&
     ) where (status not in ('Cancelled','NoShow'));
 exception when duplicate_object then null; end $$;
+
+-- Prevent clinic and online appointments from sharing the same active doctor slot.
+do $$ begin
+  alter table public.appointments add constraint doctor_shared_slot_type_conflict
+    exclude using gist (
+      doctor_id with =,
+      appointment_type with <>,
+      slot_range with &&
+    ) where (status not in ('Cancelled','NoShow'));
+exception when duplicate_object then null; end $$;
+
+create table if not exists public.online_booking_reservations (
+  id uuid primary key default gen_random_uuid(),
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  doctor_id uuid not null references public.doctors(id) on delete cascade,
+  appointment_date date not null,
+  start_time time not null,
+  end_time time not null,
+  queue_number smallint not null check (queue_number between 1 and 5),
+  reason text not null default '',
+  amount numeric(10,2) not null check (amount >= 0),
+  status text not null check (status in ('Pending','Paid','Failed','Expired','Converted')) default 'Pending',
+  payment_provider text,
+  payment_ref text,
+  appointment_id uuid unique references public.appointments(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (start_time < end_time)
+);
+
+create unique index if not exists online_booking_reservations_payment_ref_uidx
+  on public.online_booking_reservations(payment_provider, payment_ref)
+  where payment_ref is not null;
+
+create unique index if not exists online_booking_reservations_doctor_slot_queue_uidx
+  on public.online_booking_reservations(doctor_id, appointment_date, start_time, queue_number)
+  where status in ('Pending','Paid');
 
 -- ---------- PRICING & BILLING ----------
 create table if not exists public.pricing (
@@ -217,8 +263,12 @@ create table if not exists public.system_settings (
   address text not null default '',
   online_consultation_fee numeric(10,2) not null default 0,
   max_patients_per_hour smallint not null default 5 check (max_patients_per_hour between 1 and 20),
+  clinic_open_time time not null default '08:00',
+  clinic_close_time time not null default '17:00',
   updated_at timestamptz not null default now()
 );
+alter table public.system_settings add column if not exists clinic_open_time time not null default '08:00';
+alter table public.system_settings add column if not exists clinic_close_time time not null default '17:00';
 insert into public.system_settings (id) values (true) on conflict do nothing;
 
 -- ---------- AUDIT LOG ----------
@@ -299,6 +349,7 @@ alter table public.consultation_notes   enable row level security;
 alter table public.billings             enable row level security;
 alter table public.billing_items        enable row level security;
 alter table public.payments             enable row level security;
+alter table public.online_booking_reservations enable row level security;
 alter table public.pricing              enable row level security;
 alter table public.notifications        enable row level security;
 alter table public.system_settings      enable row level security;
@@ -410,6 +461,14 @@ create policy payments_read on public.payments for select
 
 drop policy if exists payments_staff_write on public.payments;
 create policy payments_staff_write on public.payments for all
+  using (public.is_staff()) with check (public.is_staff());
+
+drop policy if exists reservation_read on public.online_booking_reservations;
+create policy reservation_read on public.online_booking_reservations for select
+  using (patient_id = auth.uid() or public.is_staff());
+
+drop policy if exists reservation_staff_write on public.online_booking_reservations;
+create policy reservation_staff_write on public.online_booking_reservations for all
   using (public.is_staff()) with check (public.is_staff());
 
 -- PRICING

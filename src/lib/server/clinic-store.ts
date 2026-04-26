@@ -373,6 +373,8 @@ export async function readSystemSettings(): Promise<SystemSettings> {
       address: string;
       online_consultation_fee: number;
       max_patients_per_hour: number;
+      clinic_open_time?: string | null;
+      clinic_close_time?: string | null;
     }>();
   if (!data) return INITIAL_SYSTEM_SETTINGS;
   return {
@@ -382,6 +384,8 @@ export async function readSystemSettings(): Promise<SystemSettings> {
     address: data.address,
     onlineConsultationFee: Number(data.online_consultation_fee),
     maxPatientsPerHour: data.max_patients_per_hour,
+    clinicOpenTime: data.clinic_open_time?.slice(0, 5) ?? INITIAL_SYSTEM_SETTINGS.clinicOpenTime,
+    clinicCloseTime: data.clinic_close_time?.slice(0, 5) ?? INITIAL_SYSTEM_SETTINGS.clinicCloseTime,
   };
 }
 
@@ -396,6 +400,8 @@ export async function saveSystemSettings(settings: SystemSettings): Promise<Syst
       address: settings.address,
       online_consultation_fee: settings.onlineConsultationFee,
       max_patients_per_hour: settings.maxPatientsPerHour,
+      clinic_open_time: settings.clinicOpenTime,
+      clinic_close_time: settings.clinicCloseTime,
       updated_at: new Date().toISOString(),
     })
     .eq("id", true);

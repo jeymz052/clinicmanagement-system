@@ -4,11 +4,16 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { DEFAULT_ROLE, type UserRole } from "@/src/lib/roles";
+import {
+  roleToUiRole,
+  readRoleFromUserMetadata,
+} from "@/src/lib/auth/role-mappings";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase/client";
 import { resolveProtectedUiRole } from "@/src/lib/auth/protected-accounts";
 
@@ -36,66 +41,7 @@ type RoleContextValue = {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 function readRoleFromUser(user: User | null): UserRole {
-  return resolveProtectedUiRole(roleToUiRole(user?.app_metadata?.role), user?.email) ?? DEFAULT_ROLE;
-}
-
-function isValidRole(value: unknown): value is UserRole {
-  return (
-    value === "SUPER_ADMIN" ||
-    value === "SECRETARY" ||
-    value === "DOCTOR" ||
-    value === "PATIENT"
-  );
-}
-
-function dbRoleToUiRole(dbRole: string | null | undefined): UserRole {
-  switch (dbRole?.toLowerCase()) {
-    case "super_admin":
-    case "admin":
-      return "SUPER_ADMIN";
-    case "secretary":
-      return "SECRETARY";
-    case "doctor":
-      return "DOCTOR";
-    case "patient":
-      return "PATIENT";
-    default:
-      return DEFAULT_ROLE;
-  }
-}
-
-function roleToUiRole(rawRole: unknown): UserRole | null {
-  if (isValidRole(rawRole)) return rawRole;
-  if (typeof rawRole !== "string") return null;
-  return dbRoleToUiRole(rawRole);
-}
-
-async function fetchRoleFromApi(accessToken: string): Promise<UserRole | null> {
-  const attempts = 3;
-
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const res = await fetch("/api/v2/me", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) continue;
-      const payload = (await res.json()) as { profile?: { role?: string; email?: string } };
-      const parsedRole = resolveProtectedUiRole(
-        roleToUiRole(payload.profile?.role),
-        payload.profile?.email,
-      );
-      if (parsedRole) return parsedRole;
-    } catch {
-      // Network timeouts can happen in local dev; retry briefly before fallback.
-    }
-
-    if (attempt < attempts) {
-      await new Promise((resolve) => setTimeout(resolve, 350 * attempt));
-    }
-  }
-
-  return null;
+  return readRoleFromUserMetadata(user) ?? DEFAULT_ROLE;
 }
 
 async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | null> {
@@ -108,11 +54,16 @@ async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | n
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) continue;
-      const payload = (await res.json()) as { profile?: UserProfile };
-      if (payload.profile) {
+      const payload = (await res.json()) as { profile?: UserProfile | null };
+      const nextProfile = payload.profile;
+      const parsedRole = resolveProtectedUiRole(
+        roleToUiRole(nextProfile?.role),
+        nextProfile?.email,
+      );
+      if (nextProfile && parsedRole) {
         return {
-          ...payload.profile,
-          role: resolveProtectedUiRole(roleToUiRole(payload.profile.role), payload.profile.email) ?? payload.profile.role,
+          ...nextProfile,
+          role: parsedRole,
         };
       }
     } catch {
@@ -126,33 +77,45 @@ async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | n
 
   return null;
 }
-
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(DEFAULT_ROLE);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const requestSequenceRef = useRef(0);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     let active = true;
 
     async function applySession(nextSession: Session | null) {
+      const requestId = ++requestSequenceRef.current;
       if (!active) return;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      setIsLoading(true);
 
       if (nextSession?.user) {
-        // Optimistic role from metadata, then refine from profiles table
-        setRole(readRoleFromUser(nextSession.user));
-        const [dbRole, dbProfile] = await Promise.all([
-          fetchRoleFromApi(nextSession.access_token),
-          fetchProfileFromApi(nextSession.access_token),
-        ]);
-        if (!active) return;
-        if (dbRole) setRole(dbRole);
-        setProfile(dbProfile);
+        const optimisticRole = readRoleFromUserMetadata(nextSession.user);
+        if (optimisticRole) {
+          setRole(optimisticRole);
+        }
+
+        const dbProfile = await fetchProfileFromApi(nextSession.access_token);
+        if (!active || requestId !== requestSequenceRef.current) return;
+
+        if (dbProfile) {
+          setProfile(dbProfile);
+          setRole(
+            resolveProtectedUiRole(roleToUiRole(dbProfile.role), dbProfile.email)
+            ?? optimisticRole
+            ?? readRoleFromUser(nextSession.user),
+          );
+        } else {
+          setProfile(null);
+          setRole(optimisticRole ?? readRoleFromUser(nextSession.user));
+        }
       } else {
         setRole(DEFAULT_ROLE);
         setProfile(null);

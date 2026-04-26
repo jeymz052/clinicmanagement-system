@@ -6,8 +6,10 @@ export type DbRole =
   | "patient";
 
 export type ApptType = "Clinic" | "Online";
+export type ScheduleMode = "Clinic" | "Online" | "Both";
 
 export type ApptStatus =
+  | "PendingApproval"
   | "PendingPayment"
   | "Confirmed"
   | "InProgress"
@@ -49,6 +51,7 @@ export type DoctorSchedule = {
   start_time: string;
   end_time: string;
   slot_minutes: number;
+  schedule_mode: ScheduleMode;
   is_active: boolean;
 };
 
@@ -87,6 +90,24 @@ export type Payment = {
   provider_ref: string | null;
   paid_at: string | null;
   created_at: string;
+};
+
+export type OnlineBookingReservation = {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  queue_number: number;
+  reason: string;
+  amount: number;
+  status: "Pending" | "Paid" | "Failed" | "Expired" | "Converted";
+  payment_provider: string | null;
+  payment_ref: string | null;
+  appointment_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Billing = {

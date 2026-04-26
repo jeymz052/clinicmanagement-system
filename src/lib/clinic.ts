@@ -40,6 +40,8 @@ export type SystemSettings = {
   address: string;
   onlineConsultationFee: number;
   maxPatientsPerHour: number;
+  clinicOpenTime: string;
+  clinicCloseTime: string;
 };
 
 // All clinic data now lives in Supabase. Only INITIAL_SYSTEM_SETTINGS remains
@@ -51,4 +53,6 @@ export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
   address: "123 Medical Avenue",
   onlineConsultationFee: 120,
   maxPatientsPerHour: 5,
+  clinicOpenTime: "08:00",
+  clinicCloseTime: "17:00",
 };

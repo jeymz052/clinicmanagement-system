@@ -11,6 +11,8 @@ const EMPTY: SystemSettings = {
   address: "",
   onlineConsultationFee: 0,
   maxPatientsPerHour: 5,
+  clinicOpenTime: "08:00",
+  clinicCloseTime: "17:00",
 };
 
 export default function SettingsPage() {
@@ -20,7 +22,7 @@ export default function SettingsPage() {
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isSaving, startTransition] = useTransition();
 
-  const canEdit = role === "SUPER_ADMIN";
+  const canEdit = role === "SUPER_ADMIN" || role === "DOCTOR";
 
   useEffect(() => {
     if (authLoading || !accessToken) return;
@@ -76,6 +78,21 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-slate-500">System and clinic-wide configuration</p>
       </div>
 
+      <section className="grid gap-4 md:grid-cols-3">
+        <RuleCard
+          title="Clinic Hours"
+          description="Adjust the public-facing clinic opening and closing hours used across schedule management and front-desk operations."
+        />
+        <RuleCard
+          title="Online Consultation"
+          description="Online appointments still require a successful payment before the appointment can be treated as confirmed."
+        />
+        <RuleCard
+          title="Capacity"
+          description="Max patients per hour remains capped by the current scheduling model, so keep this aligned with doctor schedules."
+        />
+      </section>
+
       {feedback ? (
         <div
           className={`rounded-xl px-4 py-3 text-sm font-medium ${
@@ -90,7 +107,7 @@ export default function SettingsPage() {
 
       {!canEdit ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Read-only view. Only Super Admin can modify system settings.
+          Read-only view. Only Super Admin and Doctor can modify system settings.
         </div>
       ) : null}
 
@@ -140,6 +157,27 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
+              <label className="block text-sm font-medium text-slate-700">Clinic Opens</label>
+              <input
+                type="time"
+                value={settings.clinicOpenTime}
+                onChange={(e) => updateField("clinicOpenTime", e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Clinic Closes</label>
+              <input
+                type="time"
+                value={settings.clinicCloseTime}
+                onChange={(e) => updateField("clinicCloseTime", e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div>
               <label className="block text-sm font-medium text-slate-700">Online Consultation Fee</label>
               <input
                 type="number"
@@ -177,6 +215,15 @@ export default function SettingsPage() {
           ) : null}
         </fieldset>
       </form>
+    </div>
+  );
+}
+
+function RuleCard({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </div>
   );
 }

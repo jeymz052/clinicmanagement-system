@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { FaPowerOff, FaRegPenToSquare } from "react-icons/fa6";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { DbRole, Profile } from "@/src/lib/db/types";
 
@@ -48,6 +49,8 @@ const ROLE_PERMISSION_CATALOG: Record<RoleKey, PermissionItem[]> = {
     { key: "add_consultation_notes", label: "Add consultation notes" },
     { key: "start_online_consultation", label: "Start online consultation" },
     { key: "full_admin_access", label: "Full admin access" },
+    { key: "manage_roles_permissions", label: "Manage roles & permissions" },
+    { key: "system_configuration", label: "System configuration" },
     { key: "handle_pos_billing", label: "Handle POS billing" },
   ],
   secretary: [
@@ -137,7 +140,7 @@ export default function UsersPage() {
   const submitLockRef = useRef(false);
   const editSubmitLockRef = useRef(false);
 
-  const canManage = role === "SUPER_ADMIN";
+  const canManage = role === "SUPER_ADMIN" || role === "DOCTOR";
   const currentUserId = sessionUser?.id ?? null;
 
   const filtered = useMemo(() => {
@@ -654,7 +657,7 @@ export default function UsersPage() {
   if (!canManage) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Forbidden. Only Super Admin can manage users.
+        Forbidden. Only Super Admin and Doctor can manage users.
       </div>
     );
   }
@@ -907,21 +910,25 @@ export default function UsersPage() {
                 type="button"
                 disabled={isMutating}
                 onClick={() => openEditModal(u)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label={`Edit ${u.full_name}`}
+                title="Edit user"
               >
-                Edit
+                <FaRegPenToSquare className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 disabled={isMutating}
                 onClick={() => toggleActive(u)}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-150 focus:outline-none focus:ring-2 ${
+                className={`inline-flex items-center justify-center rounded-lg border px-3 py-2 transition-all duration-150 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
                   u.is_active
                     ? "border-red-200 text-red-700 hover:bg-red-50 focus:ring-red-200"
                     : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
                 }`}
+                aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
+                title={u.is_active ? "Deactivate user" : "Activate user"}
               >
-                {u.is_active ? "Deactivate" : "Activate"}
+                <FaPowerOff className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -1021,21 +1028,25 @@ export default function UsersPage() {
                       type="button"
                       disabled={isMutating}
                       onClick={() => openEditModal(u)}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={`Edit ${u.full_name}`}
+                      title="Edit user"
                     >
-                      Edit
+                      <FaRegPenToSquare className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
                       disabled={isMutating}
                       onClick={() => toggleActive(u)}
-                      className={`rounded-lg border px-3 py-1 text-xs font-medium transition-all duration-150 focus:outline-none focus:ring-2 ${
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-150 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
                         u.is_active
                           ? "border-red-200 text-red-700 hover:bg-red-50 focus:ring-red-200"
                           : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
                       }`}
+                      aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
+                      title={u.is_active ? "Deactivate user" : "Activate user"}
                     >
-                      {u.is_active ? "Deactivate" : "Activate"}
+                      <FaPowerOff className="h-4 w-4" />
                     </button>
                   </div>
                 </td>

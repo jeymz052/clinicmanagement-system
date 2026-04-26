@@ -6,7 +6,7 @@ import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import { formatDisplayDate, formatRange, getDoctorById } from "@/src/lib/appointments";
 
-type OnlinePaymentMethod = "QR" | "Card" | "BankTransfer";
+type OnlinePaymentMethod = "GCash" | "QR" | "Card" | "BankTransfer";
 
 type OnlinePaymentRecord = {
   id: string;
@@ -372,6 +372,7 @@ function formatRecordDate(value: string | null) {
 }
 
 function formatMethod(method?: OnlinePaymentMethod) {
+  if (method === "GCash") return "GCash / QR";
   if (method === "QR") return "QR Payment";
   if (method === "BankTransfer") return "Bank Transfer";
   if (method === "Card") return "Card Payment";
