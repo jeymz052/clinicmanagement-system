@@ -2,7 +2,6 @@
 
 import { type ReactNode, useState, useTransition } from "react";
 import {
-  approveClinicAppointmentAction,
   deleteAppointmentAction,
   markAppointmentPaidAction,
   updateAppointmentAction,
@@ -143,19 +142,6 @@ export default function AppointmentListPage({
     });
   }
 
-  function approveAppointment(appointmentId: string) {
-    if (!accessToken) {
-      setFeedback("Sign in again to continue.");
-      return;
-    }
-
-    startUpdateTransition(async () => {
-      const result = await approveClinicAppointmentAction(accessToken, appointmentId);
-      setAppointments(result.appointments);
-      setFeedback(result.message);
-    });
-  }
-
   return (
     <div className="space-y-6 pb-8">
       <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
@@ -205,7 +191,7 @@ export default function AppointmentListPage({
                     <Badge tone={appointment.type === "Clinic" ? "emerald" : "sky"}>{appointment.type}</Badge>
                     <Badge
                       tone={
-                        appointment.status === "Pending Payment" || appointment.status === "Pending Approval"
+                        appointment.status === "Pending Payment"
                           ? "amber"
                           : "emerald"
                       }
@@ -222,12 +208,7 @@ export default function AppointmentListPage({
                 <div className="flex flex-wrap gap-2">
                   {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
                     <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">
-                      Continue Payment
-                    </button>
-                  ) : null}
-                  {appointment.type === "Clinic" && appointment.status === "Pending Approval" && canManage ? (
-                    <button type="button" onClick={() => approveAppointment(appointment.id)} className="rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-600">
-                      Approve Appointment
+                      Resume Legacy Payment
                     </button>
                   ) : null}
                   {appointment.meetingLink ? (

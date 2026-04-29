@@ -437,11 +437,11 @@ export default function AdminDashboard() {
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-amber-300 animate-fade-in-up stagger-4">
           <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-amber-500 opacity-10" />
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Payments</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Legacy Unpaid Online</p>
             <span className="text-xs font-semibold text-amber-600">all time</span>
           </div>
           <p className="text-3xl font-bold text-slate-900 mt-2">{pendingPayments}</p>
-          <p className="text-xs text-slate-400 mt-1">Awaiting payment</p>
+          <p className="text-xs text-slate-400 mt-1">Legacy records awaiting payment</p>
           <MiniSparkline data={[pendingPayments]} color="#fbbf24" />
           <ProgressBar value={pendingPayments} max={Math.max(10, appointments.length)} color="#fbbf24" />
         </div>

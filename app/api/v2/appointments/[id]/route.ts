@@ -1,6 +1,5 @@
 import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
 import {
-  approveAppointment,
   canReadAppointment,
   cancelAppointment,
   getAppointment,
@@ -33,12 +32,9 @@ export async function DELETE(req: Request, { params }: Ctx) {
 
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
-    const actor = await requireActor(req);
-    const { id } = await params;
-    const body = (await req.json()) as { action?: string };
-    if (body.action !== "approve") throw new HttpError(400, "Unsupported action");
-    const appt = await approveAppointment(id, actor);
-    return ok({ appointment: appt });
+    await requireActor(req);
+    await params;
+    throw new HttpError(410, "Clinic appointment approval is no longer used. Clinic bookings are confirmed immediately.");
   } catch (e) {
     return httpError(e);
   }

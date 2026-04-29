@@ -1,7 +1,6 @@
 export type AppointmentType = "Clinic" | "Online";
 
 export type AppointmentStatus =
-  | "Pending Approval"
   | "Confirmed"
   | "In Progress"
   | "Paid"
@@ -203,7 +202,7 @@ export function getAppointmentSummary(appointments: AppointmentRecord[]) {
     (appointment) => appointment.status === "Confirmed" || appointment.status === "Completed",
   ).length;
   const pendingCount = appointments.filter(
-    (appointment) => appointment.status === "Pending Payment" || appointment.status === "Pending Approval",
+    (appointment) => appointment.status === "Pending Payment",
   ).length;
 
   return {
@@ -220,6 +219,10 @@ export function createAppointmentRecord(
   appointments: AppointmentRecord[],
   blockedDays: BlockedDayLookup = {},
 ) {
+  if (input.type === "Online") {
+    return null;
+  }
+
   const slotStatuses = getSlotStatuses(
     input.doctorId,
     input.date,
@@ -237,7 +240,7 @@ export function createAppointmentRecord(
     ...input,
     id: `apt-${String(appointments.length + 1).padStart(3, "0")}`,
     end: matchingSlot.end,
-    status: input.type === "Clinic" ? "Pending Approval" : "Pending Payment",
+    status: "Confirmed",
     queueNumber: matchingSlot.nextQueueNumber,
     meetingLink: null,
   } satisfies AppointmentRecord;

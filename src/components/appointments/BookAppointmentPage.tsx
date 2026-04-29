@@ -236,7 +236,7 @@ export default function BookAppointmentPage() {
       setVisibleWeekStart(today);
       setActiveStep(1);
       setFeedback({
-        message: `Booked! ${result.appointment.patientName} with ${selectedDoctor?.name ?? "doctor"} on ${formatDisplayDate(result.appointment.date)} at ${formatRange(result.appointment.start, result.appointment.end)}. Queue #${result.appointment.queueNumber}.${formData.type === "Clinic" ? " Clinic appointments now wait for approval." : ""}`,
+        message: `Booked! ${result.appointment.patientName} with ${selectedDoctor?.name ?? "doctor"} on ${formatDisplayDate(result.appointment.date)} at ${formatRange(result.appointment.start, result.appointment.end)}. Queue #${result.appointment.queueNumber}.${formData.type === "Clinic" ? " Clinic appointment confirmed." : ""}`,
         type: "success",
       });
     });
@@ -358,19 +358,11 @@ export default function BookAppointmentPage() {
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                   <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm">
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Select doctor</label>
-                    <select
-                      value={formData.doctorId}
-                      onChange={(event) => updateForm("doctorId", event.target.value)}
-                      className="mt-3 w-full rounded-[1.4rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] px-4 py-4 text-base font-semibold text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-                    >
-                      {doctors.map((doctor) => (
-                        <option key={doctor.slug} value={doctor.slug}>
-                          {doctor.name} - {doctor.specialty}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-2 text-sm text-slate-500">Choose doctor, date, and time before confirming your visit.</p>
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Assigned doctor</label>
+                    <div className="mt-3 w-full rounded-[1.4rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] px-4 py-4 text-base font-semibold text-slate-900 shadow-sm">
+                      {selectedDoctor?.name ?? "Dra. Chiara C. Punzalan M.D."}
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">Dra. Chiara C. Punzalan M.D. is assigned automatically because she is the only doctor.</p>
                   </div>
 
                   <div className="rounded-[1.75rem] border border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#dcfce7_100%)] p-5 shadow-sm">
@@ -607,7 +599,7 @@ export default function BookAppointmentPage() {
                     Reset
                   </button>
                   <button type="submit" disabled={isLoading || isSubmitting || !step4Done} className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_16px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-60">
-                    {isSubmitting ? "Booking..." : formData.type === "Online" ? "Pay First & Confirm Online Consultation" : "Request Clinic Booking"}
+                    {isSubmitting ? "Booking..." : formData.type === "Online" ? "Pay First & Confirm Online Consultation" : "Confirm Clinic Appointment"}
                   </button>
                 </div>
               </div>

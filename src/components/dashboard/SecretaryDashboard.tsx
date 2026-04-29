@@ -52,7 +52,7 @@ export default function SecretaryDashboard() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card label="Today Appointments" value={todayAppointments.length} />
-        <Card label="Pending Online Payment" value={pendingOnline} />
+        <Card label="Legacy Unpaid Online" value={pendingOnline} />
         <Card label="Clinic Billing Queue" value={waitingClinicBilling} />
         <Card label="Total Patients" value={patients.length} />
       </div>

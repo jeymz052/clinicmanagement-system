@@ -3,7 +3,6 @@
 import { hasPermission } from "@/src/lib/auth/permissions";
 import { requireAuthenticatedUser } from "@/src/lib/auth/server-auth";
 import {
-  approveClinicAppointment,
   createPersistedAppointmentWithContext,
   deletePersistedAppointment,
   markAppointmentPaid,
@@ -68,16 +67,6 @@ export async function markAppointmentPaidAction(accessToken: string, appointment
   }
 
   return markAppointmentPaid(appointmentId);
-}
-
-export async function approveClinicAppointmentAction(accessToken: string, appointmentId: string) {
-  const authenticatedUser = await requireAuthenticatedUser(accessToken);
-
-  if (!hasPermission(authenticatedUser.role, "appointments.manage")) {
-    return unauthorized("You are not allowed to approve appointments.");
-  }
-
-  return approveClinicAppointment(appointmentId);
 }
 
 export async function markClinicPosPaidAction(accessToken: string, appointmentId: string) {

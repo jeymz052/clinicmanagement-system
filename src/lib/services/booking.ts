@@ -183,7 +183,7 @@ export async function reserveAppointment(input: BookingInput, actor: Actor) {
       end_time: input.end_time,
       appointment_type: input.appointment_type,
       reason: input.reason ?? "",
-      status: "PendingApproval",
+      status: "Confirmed",
       queue_number,
     })
     .select()
@@ -262,8 +262,6 @@ export async function startConsultation(id: string, actor: Actor) {
     throw new HttpError(403, "Not your appointment");
   if (appt.status === "PendingPayment")
     throw new HttpError(400, "Cannot start — online payment not confirmed");
-  if (appt.status === "PendingApproval")
-    throw new HttpError(400, "Cannot start until the appointment is approved");
   if (appt.status !== "Confirmed")
     throw new HttpError(400, `Cannot start from status ${appt.status}`);
 
@@ -295,33 +293,6 @@ export async function completeConsultation(id: string, actor: Actor) {
     .select()
     .single<Appointment>();
   if (error) throw error;
-  return data;
-}
-
-export async function approveAppointment(id: string, actor: Actor) {
-  if (actor.profile.role !== "doctor" && !isStaff(actor.profile.role))
-    throw new HttpError(403, "Only clinic staff can approve appointments");
-  const appt = await getAppointment(id);
-  if (appt.appointment_type !== "Clinic")
-    throw new HttpError(400, "Only clinic appointments require approval");
-  if (appt.status !== "PendingApproval")
-    throw new HttpError(400, `Cannot approve from status ${appt.status}`);
-
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("appointments")
-    .update({ status: "Confirmed" })
-    .eq("id", id)
-    .select()
-    .single<Appointment>();
-  if (error) throw error;
-
-  await enqueueNotification({
-    user_id: appt.patient_id,
-    template: "appointment_confirmed",
-    channels: ["email", "sms"],
-    payload: { appointment_id: id },
-  });
   return data;
 }
 

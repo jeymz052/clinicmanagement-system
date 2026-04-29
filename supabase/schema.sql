@@ -24,11 +24,7 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   create type appt_status as enum
-    ('PendingApproval','PendingPayment','Confirmed','InProgress','Completed','Cancelled','NoShow');
-exception when duplicate_object then null; end $$;
-
-do $$ begin
-  alter type appt_status add value if not exists 'PendingApproval' before 'PendingPayment';
+    ('PendingPayment','Confirmed','InProgress','Completed','Cancelled','NoShow');
 exception when duplicate_object then null; end $$;
 
 do $$ begin

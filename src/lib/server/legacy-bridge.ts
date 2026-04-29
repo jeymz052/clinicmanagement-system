@@ -100,7 +100,6 @@ function deriveLegacyStatus(v2: V2Appointment): AppointmentStatus {
     if (v2.status === "InProgress") return "In Progress";
     return "Paid";
   }
-  if (v2.status === "PendingApproval") return "Pending Approval";
   if (v2.status === "Completed") return "Completed";
   if (v2.status === "InProgress") return "In Progress";
   return "Confirmed";

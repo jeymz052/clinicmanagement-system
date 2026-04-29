@@ -9,7 +9,6 @@ export type ApptType = "Clinic" | "Online";
 export type ScheduleMode = "Clinic" | "Online" | "Both";
 
 export type ApptStatus =
-  | "PendingApproval"
   | "PendingPayment"
   | "Confirmed"
   | "InProgress"

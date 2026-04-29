@@ -90,8 +90,8 @@ export function renderTemplate(template: string, payload: TemplatePayload): { su
       };
     case "appointment_confirmed":
       return {
-        subject: "Your appointment is approved",
-        body: `Your appointment (ref ${appt}) is approved and confirmed.${link ? ` Meeting link: ${link}` : ""}`,
+        subject: "Your appointment is confirmed",
+        body: `Your appointment (ref ${appt}) is confirmed.${link ? ` Meeting link: ${link}` : ""}`,
       };
     case "appointment_payment_success":
       return {

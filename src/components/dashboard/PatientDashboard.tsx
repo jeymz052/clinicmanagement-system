@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useRole } from "@/src/components/layout/RoleProvider";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
+import { useRole } from "@/src/components/layout/RoleProvider";
 import type { AppointmentRecord } from "@/src/lib/appointments";
 
 function isoToday() {
@@ -26,8 +26,7 @@ function upcomingComparator(a: AppointmentRecord, b: AppointmentRecord) {
 
 export default function PatientDashboard() {
   const { user } = useRole();
-  const name =
-    user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "Patient";
+  const name = user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "Patient";
   const { appointments, isLoading } = useAppointments();
 
   const today = isoToday();
@@ -35,11 +34,8 @@ export default function PatientDashboard() {
     () => appointments.filter((a) => a.date >= today && a.status !== "Completed").sort(upcomingComparator),
     [appointments, today],
   );
-  const pastCompleted = useMemo(
-    () => appointments.filter((a) => a.status === "Completed").length,
-    [appointments],
-  );
-  const pendingPayments = useMemo(
+  const pastCompleted = useMemo(() => appointments.filter((a) => a.status === "Completed").length, [appointments]);
+  const legacyPendingPayments = useMemo(
     () => appointments.filter((a) => a.status === "Pending Payment"),
     [appointments],
   );
@@ -54,7 +50,7 @@ export default function PatientDashboard() {
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Patient Dashboard</p>
             <h1 className="mt-3 text-3xl font-black text-slate-900">Welcome, {name}</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-              Keep track of your bookings, pending payments, and next consultation from one calm workspace.
+              Keep track of your confirmed bookings, meeting links, and next consultation from one calm workspace.
             </p>
           </div>
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
@@ -72,13 +68,17 @@ export default function PatientDashboard() {
           <StatCard label="Completed" value={pastCompleted} tone="emerald" />
         </div>
         <div className="animate-fade-in-up stagger-3">
-          <StatCard label="Pending Payment" value={pendingPayments.length} tone="amber" />
+          <StatCard label="Legacy Unpaid" value={legacyPendingPayments.length} tone="amber" />
         </div>
+      </div>
+
+      <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/60 px-4 py-4 text-sm text-slate-700 animate-fade-in-up stagger-4 shadow-sm">
+        Online consultations are paid first during booking. They appear in your appointments only after payment is confirmed.
       </div>
 
       {next ? (
         <div className="rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.16),_transparent_28%),linear-gradient(135deg,_#f0fdf4,_#ffffff_52%,_#ecfeff)] p-6 shadow-[0_20px_45px_rgba(16,185,129,0.12)] animate-pop-in stagger-4 transition hover:-translate-y-0.5">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Next Appointment</p>
               <p className="mt-2 text-2xl font-black text-slate-900">
@@ -108,7 +108,7 @@ export default function PatientDashboard() {
                   rel="noopener noreferrer"
                   className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5"
                 >
-                  Join Consultation →
+                  Join Consultation
                 </a>
               ) : null}
               {next.status === "Pending Payment" ? (
@@ -116,7 +116,7 @@ export default function PatientDashboard() {
                   href="/payments"
                   className="rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-700"
                 >
-                  Pay Now →
+                  Resume Legacy Payment
                 </Link>
               ) : null}
             </div>
@@ -124,7 +124,7 @@ export default function PatientDashboard() {
         </div>
       ) : null}
 
-      {pendingPayments.length > 0 ? (
+      {legacyPendingPayments.length > 0 ? (
         <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 animate-fade-in-up stagger-5 flex items-start gap-3 shadow-sm">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 animate-soft-pulse">
             <svg className="h-4 w-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +132,7 @@ export default function PatientDashboard() {
             </svg>
           </div>
           <p className="text-sm font-medium text-amber-900">
-            You have {pendingPayments.length} appointment{pendingPayments.length === 1 ? "" : "s"} awaiting payment.
+            You have {legacyPendingPayments.length} legacy online appointment{legacyPendingPayments.length === 1 ? "" : "s"} awaiting payment.
           </p>
         </div>
       ) : null}
@@ -141,7 +141,7 @@ export default function PatientDashboard() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-900">Upcoming Appointments</h2>
           <Link href="/appointments/my" className="text-xs font-semibold text-emerald-700 transition-colors hover:text-emerald-800">
-            Book another →
+            Book another
           </Link>
         </div>
         {isLoading ? (
@@ -166,12 +166,14 @@ export default function PatientDashboard() {
             {upcoming.slice(0, 5).map((appt, i) => (
               <div
                 key={appt.id}
-                className={`flex items-center justify-between py-3 px-2 -mx-2 rounded-[1rem] transition-colors hover:bg-emerald-50/40 animate-slide-in-left stagger-${Math.min(i + 1, 5)}`}
+                className={`flex items-center justify-between px-2 py-3 -mx-2 rounded-[1rem] transition-colors hover:bg-emerald-50/40 animate-slide-in-left stagger-${Math.min(i + 1, 5)}`}
               >
                 <div className="min-w-0 flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
-                    appt.type === "Online" ? "bg-teal-100 text-teal-700" : "bg-emerald-100 text-emerald-700"
-                  }`}>
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
+                      appt.type === "Online" ? "bg-teal-100 text-teal-700" : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
                     <span className="text-xs font-bold">#{appt.queueNumber}</span>
                   </div>
                   <div className="min-w-0">
@@ -253,7 +255,7 @@ function QuickAction({ href, label, color }: { href: string; label: string; colo
       className={`group flex items-center justify-center gap-1.5 rounded-[1.2rem] border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_16px_30px_rgba(16,185,129,0.10)] ${colorMap[color]}`}
     >
       <span>{label}</span>
-      <span className="opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0">→</span>
+      <span className="opacity-0 -translate-x-1 transition-all group-hover:translate-x-0 group-hover:opacity-100">→</span>
     </Link>
   );
 }

@@ -357,7 +357,7 @@ export async function createPersistedAppointmentWithContext(
         end_time,
         appointment_type: payload.type,
         reason: payload.reason,
-        status: "PendingApproval",
+        status: "Confirmed",
         queue_number: queueNumber,
       })
       .select()
@@ -374,7 +374,7 @@ export async function createPersistedAppointmentWithContext(
     const appointment = (await hydrateRows([inserted]))[0];
     return {
       ok: true as const,
-      message: payload.type === "Clinic" ? "Appointment booked and awaiting approval." : "Appointment booked successfully.",
+      message: payload.type === "Clinic" ? "Clinic appointment confirmed." : "Appointment booked successfully.",
       appointment,
       appointments: context.actor?.role === "PATIENT"
         ? await readAppointments({ patientId: patientUuid })
@@ -437,7 +437,7 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
           ? "Completed"
           : existing.status === "Confirmed"
             ? "Confirmed"
-            : "PendingApproval";
+            : "Confirmed";
 
     const meeting_link = payload.type === "Online" ? existing.meeting_link : null;
 
@@ -599,66 +599,6 @@ export async function markAppointmentPaid(appointmentId: string) {
     ok: true as const,
     message: "Payment confirmed and meeting link generated.",
     appointment: appointments.find((a) => a.id === appointmentId) ?? null,
-    appointments,
-  };
-}
-
-export async function approveClinicAppointment(appointmentId: string) {
-  const supabase = getSupabaseAdmin();
-  const { data: appt, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("id", appointmentId)
-    .single<V2Appointment>();
-  if (error || !appt) {
-    return {
-      ok: false as const,
-      message: "Appointment not found.",
-      appointments: await readAppointments(),
-    };
-  }
-  if (appt.appointment_type !== "Clinic") {
-    return {
-      ok: false as const,
-      message: "Only clinic appointments use manual approval.",
-      appointments: await readAppointments(),
-    };
-  }
-  if (appt.status === "Confirmed") {
-    const appointments = await readAppointments();
-    return {
-      ok: true as const,
-      message: "Appointment is already approved.",
-      appointment: appointments.find((item) => item.id === appointmentId) ?? null,
-      appointments,
-    };
-  }
-  if (appt.status !== "PendingApproval") {
-    return {
-      ok: false as const,
-      message: `Cannot approve appointment from status ${appt.status}.`,
-      appointments: await readAppointments(),
-    };
-  }
-
-  const { error: updateErr } = await supabase
-    .from("appointments")
-    .update({ status: "Confirmed" })
-    .eq("id", appt.id);
-  if (updateErr) throw updateErr;
-
-  await enqueueNotification({
-    user_id: appt.patient_id,
-    template: "appointment_confirmed",
-    channels: ["email", "sms"],
-    payload: { appointment_id: appt.id },
-  });
-
-  const appointments = await readAppointments();
-  return {
-    ok: true as const,
-    message: "Clinic appointment approved.",
-    appointment: appointments.find((item) => item.id === appointmentId) ?? null,
     appointments,
   };
 }

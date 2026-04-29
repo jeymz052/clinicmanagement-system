@@ -39,6 +39,16 @@ export async function issueBilling(input: {
     throw new HttpError(400, "Cannot bill before consultation is completed");
 
   const supabase = getSupabaseAdmin();
+  const { data: existingBilling } = await supabase
+    .from("billings")
+    .select("id, status")
+    .eq("appointment_id", appt.id)
+    .in("status", ["Draft", "Issued", "Paid"])
+    .maybeSingle<{ id: string; status: BillingStatus }>();
+  if (existingBilling) {
+    throw new HttpError(400, "A clinic POS bill already exists for this appointment.");
+  }
+
   const pricingIds = [...new Set(input.items.map((item) => item.pricing_id).filter((value): value is string => !!value))];
   if (pricingIds.length !== input.items.length) {
     throw new HttpError(400, "POS billing requires catalog services only.");
@@ -135,6 +145,7 @@ export async function issueBilling(input: {
 export async function recordBillingPayment(
   billingId: string,
   method: PaymentMethod,
+  providerRef: string | null,
   actor: Actor,
 ): Promise<{ billing: Billing; payment: Payment }> {
   if (!isStaff(actor.profile.role))
@@ -168,6 +179,7 @@ export async function recordBillingPayment(
       status: "Paid",
       paid_at: new Date().toISOString(),
       provider: "manual",
+      provider_ref: providerRef,
     })
     .select()
     .single<Payment>();
@@ -225,6 +237,9 @@ export async function updateBilling(
 
   const current = await getBilling(id, actor);
   const supabase = getSupabaseAdmin();
+  if (current.status === "Paid") {
+    throw new HttpError(400, "Paid bills can no longer be edited.");
+  }
 
   const nextItems = (input.items ?? current.billing_items).map((item) => {
     const description = item.description.trim();
