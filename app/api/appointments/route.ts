@@ -3,7 +3,6 @@ import { hasPermission } from "@/src/lib/auth/permissions";
 import { requireAuthenticatedUser } from "@/src/lib/auth/server-auth";
 import {
   createPersistedAppointmentWithContext,
-  markAppointmentPaid,
   readAppointments,
   type AppointmentFilter,
 } from "@/src/lib/server/appointments-store";
@@ -102,33 +101,4 @@ export async function POST(request: Request) {
     },
     { status: 201 },
   );
-}
-
-export async function PATCH(request: Request) {
-  const authenticatedUser = await authenticateRequest(request);
-
-  if (!authenticatedUser || !hasPermission(authenticatedUser.role, "payments.online")) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
-  const payload = (await request.json()) as { appointmentId?: string; action?: string };
-
-  if (payload.action !== "mark-paid" || !payload.appointmentId) {
-    return NextResponse.json({ message: "Invalid appointment update request." }, { status: 400 });
-  }
-
-  const result = await markAppointmentPaid(payload.appointmentId);
-
-  if (!result.ok) {
-    return NextResponse.json(
-      { message: result.message, appointments: result.appointments },
-      { status: 400 },
-    );
-  }
-
-  return NextResponse.json({
-    message: result.message,
-    appointment: result.appointment,
-    appointments: result.appointments,
-  });
 }

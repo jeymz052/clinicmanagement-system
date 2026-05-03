@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import { DOCTORS } from "@/src/lib/appointments";
+import {
+  CLINIC_CONSULTATION_HOURLY_RATE,
+  ONLINE_CONSULTATION_HOURLY_RATE,
+  normalizeConfiguredConsultationRate,
+} from "@/src/lib/consultation-pricing";
+
+const DEFAULT_DOCTOR = DOCTORS[0];
 
 export type BookingDoctor = {
   id: string;
@@ -26,8 +33,8 @@ export function useDoctors() {
           slug: doctor.id,
           name: doctor.name,
           specialty: doctor.specialty,
-          consultation_fee_clinic: 0,
-          consultation_fee_online: 0,
+          consultation_fee_clinic: CLINIC_CONSULTATION_HOURLY_RATE,
+          consultation_fee_online: ONLINE_CONSULTATION_HOURLY_RATE,
         })),
       );
       return;
@@ -60,10 +67,10 @@ export function useDoctors() {
         const nextDoctors = (body.doctors ?? []).map((doctor) => ({
           id: doctor.slug ?? doctor.id,
           slug: doctor.slug ?? doctor.id,
-          name: doctor.full_name ?? doctor.name ?? "Assigned doctor",
-          specialty: doctor.specialty ?? "General practice",
-          consultation_fee_clinic: Number(doctor.consultation_fee_clinic ?? 0),
-          consultation_fee_online: Number(doctor.consultation_fee_online ?? 0),
+          name: doctor.full_name ?? doctor.name ?? DEFAULT_DOCTOR?.name ?? "Dra. Chiara C. Punzalan M.D.",
+          specialty: doctor.specialty ?? DEFAULT_DOCTOR?.specialty ?? "General Medicine",
+          consultation_fee_clinic: normalizeConfiguredConsultationRate(Number(doctor.consultation_fee_clinic ?? 0)),
+          consultation_fee_online: normalizeConfiguredConsultationRate(Number(doctor.consultation_fee_online ?? 0)),
         }));
 
         if (nextDoctors.length > 0) {

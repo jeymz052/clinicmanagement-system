@@ -22,6 +22,9 @@ export async function requireAuthenticatedUser(accessToken: string) {
   if (error || !data.user) {
     throw new Error("Unauthorized");
   }
+  if (!data.user.email_confirmed_at) {
+    throw new Error("Unauthorized");
+  }
 
 
   // Source of truth = profiles.role. Falls back to user_metadata.role

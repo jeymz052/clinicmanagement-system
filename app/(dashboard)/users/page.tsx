@@ -680,21 +680,21 @@ export default function UsersPage() {
               setFeedback(null);
               setShowAddModal(true);
             }}
-            className="rounded-xl bg-teal-700 px-5 py-2.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-teal-800 hover:scale-[1.04] focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="rounded-xl bg-emerald-600 px-5 py-2.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-emerald-700 hover:scale-[1.04] focus:outline-none focus:ring-2 focus:ring-emerald-400"
           >
             + Add user
           </button>
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
             onClick={() => setActiveTab("accounts")}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
               activeTab === "accounts"
-                ? "bg-slate-900 text-white"
+                ? "bg-emerald-600 text-white shadow-md"
                 : "text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -703,9 +703,9 @@ export default function UsersPage() {
           <button
             type="button"
             onClick={() => setActiveTab("roles")}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
               activeTab === "roles"
-                ? "bg-slate-900 text-white"
+                ? "bg-emerald-600 text-white shadow-md"
                 : "text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -728,47 +728,47 @@ export default function UsersPage() {
 
       {activeTab === "accounts" ? (
         <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 animate-fade-in-up">
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Active users</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-800">{activeUsers}</p>
+          <p className="mt-2 text-3xl font-bold text-emerald-900">{activeUsers}</p>
         </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50/50 px-4 py-3 shadow-sm">
+        <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-sky-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Doctors</p>
-          <p className="mt-1 text-2xl font-bold text-sky-800">{doctorUsers}</p>
+          <p className="mt-2 text-3xl font-bold text-sky-900">{doctorUsers}</p>
         </div>
-        <div className="rounded-2xl border border-violet-200 bg-violet-50/50 px-4 py-3 shadow-sm">
+        <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-violet-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Secretary</p>
-          <p className="mt-1 text-2xl font-bold text-violet-800">{secretaryUsers}</p>
+          <p className="mt-2 text-3xl font-bold text-violet-900">{secretaryUsers}</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/50 px-4 py-3 shadow-sm">
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Patients</p>
-          <p className="mt-1 text-2xl font-bold text-amber-800">{patientUsers}</p>
+          <p className="mt-2 text-3xl font-bold text-amber-900">{patientUsers}</p>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-1 flex-col gap-3 md:flex-row">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-1 flex-col gap-4 md:flex-row">
             <div className="flex-1">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
                 Search
               </label>
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by email or name..."
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
               />
             </div>
             <div className="w-full md:w-56">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
                 Role
               </label>
               <select
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value as DbRole | "all")}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
               >
                 <option value="all">All</option>
                 <option value="super_admin">Super Admin</option>
@@ -778,13 +778,13 @@ export default function UsersPage() {
               </select>
             </div>
             <div className="w-full md:w-56">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
                 Status
               </label>
               <select
                 value={filterActive}
                 onChange={(e) => setFilterActive(e.target.value as typeof filterActive)}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
               >
                 <option value="all">All</option>
                 <option value="active">Active</option>
@@ -792,7 +792,7 @@ export default function UsersPage() {
               </select>
             </div>
             <div className="w-full md:w-40">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
                 Per page
               </label>
               <select
@@ -800,7 +800,7 @@ export default function UsersPage() {
                 onChange={(e) =>
                   setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])
                 }
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <option key={size} value={size}>
@@ -811,7 +811,7 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+            <div className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
               {selectedUserIds.length} selected
             </div>
             {selectedUserIds.length > 0 ? (
@@ -820,24 +820,24 @@ export default function UsersPage() {
                   type="button"
                   disabled={isMutating}
                   onClick={() => bulkSetActive(true)}
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition disabled:opacity-50"
                 >
-                  Activate selected
+                  Activate
                 </button>
                 <button
                   type="button"
                   disabled={isMutating}
                   onClick={() => bulkSetActive(false)}
-                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                  className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 transition disabled:opacity-50"
                 >
-                  Deactivate selected
+                  Deactivate
                 </button>
                 <button
                   type="button"
                   onClick={exportSelectedUsersCsv}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
-                  Export CSV
+                  Export
                 </button>
               </>
             ) : null}
@@ -848,11 +848,11 @@ export default function UsersPage() {
                 setFilterRole("all");
                 setFilterActive("all");
               }}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
             >
-              Reset filters
+              Reset
             </button>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-600 font-medium">
               {loading ? "Loading..." : `${filtered.length} user(s)`}
             </div>
           </div>
@@ -935,16 +935,16 @@ export default function UsersPage() {
         ))}
       </div>
 
-      <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md hover-lift animate-fade-in-up md:block">
+      <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm hover-lift animate-fade-in-up md:block">
         <table className="w-full text-left text-base">
-          <thead className="border-b border-slate-200 bg-slate-50">
+          <thead className="border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-cyan-50">
             <tr>
               <th className="px-4 py-4">
                 <input
                   type="checkbox"
                   checked={allVisibleSelected}
                   onChange={toggleSelectAllVisible}
-                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   aria-label="Select all visible users"
                 />
               </th>
@@ -968,20 +968,20 @@ export default function UsersPage() {
             {paginatedUsers.map((u) => (
               <tr
                 key={u.id}
-                className="border-t border-slate-200 align-top transition-all duration-150 hover:bg-teal-50/40"
+                className="border-t border-slate-200 align-top transition-all duration-150 hover:bg-emerald-50/30"
               >
                 <td className="px-4 py-4 align-middle">
                   <input
                     type="checkbox"
                     checked={selectedUserIds.includes(u.id)}
                     onChange={() => toggleUserSelection(u.id)}
-                    className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     aria-label={`Select ${u.full_name}`}
                   />
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 text-sm font-bold text-white shadow-sm">
                       {u.full_name
                         .split(" ")
                         .filter(Boolean)
@@ -998,7 +998,7 @@ export default function UsersPage() {
                 <td className="px-6 py-4 text-slate-700">{u.email}</td>
                 <td className="px-6 py-4 text-slate-700">{u.phone ?? "-"}</td>
                 <td className="px-6 py-4">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
                     {roleLabel(u.role)}
                   </span>
                 </td>
@@ -1028,7 +1028,7 @@ export default function UsersPage() {
                       type="button"
                       disabled={isMutating}
                       onClick={() => openEditModal(u)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                       aria-label={`Edit ${u.full_name}`}
                       title="Edit user"
                     >
@@ -1040,8 +1040,8 @@ export default function UsersPage() {
                       onClick={() => toggleActive(u)}
                       className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-150 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
                         u.is_active
-                          ? "border-red-200 text-red-700 hover:bg-red-50 focus:ring-red-200"
-                          : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
+                          ? "border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-200"
+                          : "border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
                       }`}
                       aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
                       title={u.is_active ? "Deactivate user" : "Activate user"}
@@ -1183,7 +1183,7 @@ export default function UsersPage() {
       {showAddModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl mx-4 overflow-hidden">
-            <div className="flex items-start justify-between border-b border-slate-200 bg-gradient-to-r from-teal-50 to-emerald-50 px-6 py-5">
+            <div className="flex items-start justify-between border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-cyan-50 px-6 py-5">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Create a new user</h2>
                 <p className="mt-1 text-sm text-slate-600">
@@ -1304,7 +1304,7 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   disabled={isMutating || isCheckingDuplicate || emailCheck.status === "duplicate"}
-                  className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300"
+                  className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition disabled:bg-emerald-300"
                 >
                   {isCheckingDuplicate ? "Checking email..." : isMutating ? "Creating..." : "Create user"}
                 </button>
@@ -1318,7 +1318,7 @@ export default function UsersPage() {
       {showEditModal && editingUser ? (
         <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl mx-4 overflow-hidden">
-            <div className="flex items-start justify-between border-b border-slate-200 bg-slate-50 px-6 py-5">
+            <div className="flex items-start justify-between border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-cyan-50 px-6 py-5">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Edit user</h2>
                 <p className="mt-1 text-sm text-slate-600">
@@ -1345,7 +1345,7 @@ export default function UsersPage() {
                   <input
                     value={editUser.full_name}
                     onChange={(e) => setEditUser((p) => ({ ...p, full_name: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                     required
                   />
                 </div>

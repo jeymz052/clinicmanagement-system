@@ -5,7 +5,6 @@ import { requireAuthenticatedUser } from "@/src/lib/auth/server-auth";
 import {
   createPersistedAppointmentWithContext,
   deletePersistedAppointment,
-  markAppointmentPaid,
   markClinicAppointmentComplete,
   readAppointments,
   updatePersistedAppointment,
@@ -57,16 +56,6 @@ export async function deleteAppointmentAction(accessToken: string, appointmentId
   }
 
   return deletePersistedAppointment(appointmentId);
-}
-
-export async function markAppointmentPaidAction(accessToken: string, appointmentId: string) {
-  const authenticatedUser = await requireAuthenticatedUser(accessToken);
-
-  if (!hasPermission(authenticatedUser.role, "payments.online")) {
-    return unauthorized("You are not allowed to confirm online payments.");
-  }
-
-  return markAppointmentPaid(appointmentId);
 }
 
 export async function markClinicPosPaidAction(accessToken: string, appointmentId: string) {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useConsultationNotes } from "@/src/components/clinic/useClinicData";
@@ -36,14 +37,15 @@ export default function OnlineConsultationPage() {
       if (appointment.type === "Clinic") {
         return (
           appointment.status === "Confirmed" ||
+          appointment.status === "In Progress" ||
           appointment.status === "Completed"
         );
       }
-      return appointment.status === "Paid";
+      return appointment.status === "Confirmed" || appointment.status === "In Progress" || appointment.status === "Completed";
     })
     .sort((left, right) => `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`));
   const onlineReady = appointments.filter(
-    (appointment) => appointment.type === "Online" && appointment.status === "Paid",
+    (appointment) => appointment.type === "Online" && appointment.status === "Confirmed",
   );
   const completedCount = notes.filter((note) => note.status === "Completed").length;
   const canManage = role !== "PATIENT";
@@ -103,10 +105,10 @@ export default function OnlineConsultationPage() {
                 status:
                   draft.status === "Completed"
                     ? "Completed"
-                    : draft.status === "In Progress"
-                      ? "In Progress"
-                      : appointment.type === "Online"
-                        ? "Paid"
+                        : draft.status === "In Progress"
+                          ? "In Progress"
+                          : appointment.type === "Online"
+                        ? "Confirmed"
                         : "Confirmed",
               }
             : item,
@@ -117,13 +119,23 @@ export default function OnlineConsultationPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="animate-fade-in-down">
-        <h1 className="text-3xl font-bold text-slate-900">Consultations</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Start paid online consultations, add consultation notes, and track progress.
-        </p>
-      </div>
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_34%),linear-gradient(135deg,#f8fffb_0%,#ffffff_100%)] p-6 shadow-[0_24px_60px_rgba(16,185,129,0.10)] animate-fade-in-down">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Consultations</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Move from queue to note-taking without extra clicks</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Start sessions, write notes, and keep progress organized with a calmer live-workflow layout.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Shortcut href="/consultations/history" label="History" />
+            <Shortcut href="/appointments/list" label="Appointments" />
+            <Shortcut href="/schedules" label="Schedules" />
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="animate-fade-in-up stagger-1">
@@ -148,8 +160,8 @@ export default function OnlineConsultationPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr,0.95fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-4">
+      <div className="grid grid-cols-1 gap-6">
+        <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] hover-lift animate-fade-in-up stagger-4">
           <h2 className="text-lg font-bold text-slate-900">Consultation Queue</h2>
           <div className="mt-5 space-y-4">
             {eligibleAppointments.length === 0 ? (
@@ -199,7 +211,7 @@ export default function OnlineConsultationPage() {
                     <button
                       type="button"
                       onClick={() => openConsultation(appointment)}
-                      className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 transition-all hover:scale-[1.02]"
+                      className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.20)] transition-all hover:-translate-y-0.5"
                     >
                       {appointment.meetingLink ? "Start Online Consultation" : "Open Note Editor"}
                     </button>
@@ -208,7 +220,7 @@ export default function OnlineConsultationPage() {
                         href={appointment.meetingLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 transition-colors"
+                        className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 transition-colors"
                       >
                         Meeting Link →
                       </a>
@@ -227,7 +239,7 @@ export default function OnlineConsultationPage() {
                               status: event.target.value as ConsultationProgress,
                             }))
                           }
-                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                          className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                         >
                           <option value="Ready">Ready</option>
                           <option value="In Progress">In Progress</option>
@@ -241,7 +253,7 @@ export default function OnlineConsultationPage() {
                           onChange={(event) =>
                             setDraft((current) => ({ ...current, note: event.target.value }))
                           }
-                          className="mt-2 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2.5"
+                          className="mt-2 min-h-32 w-full rounded-[1rem] border border-emerald-100 px-3 py-2.5 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                           placeholder="Assessment, progress, symptoms, and recommendations"
                         />
                       </label>
@@ -255,7 +267,7 @@ export default function OnlineConsultationPage() {
                               prescription: event.target.value,
                             }))
                           }
-                          className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2.5"
+                          className="mt-2 min-h-24 w-full rounded-[1rem] border border-emerald-100 px-3 py-2.5 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                           placeholder="Medication, tests, or follow-up plan"
                         />
                       </label>
@@ -264,14 +276,14 @@ export default function OnlineConsultationPage() {
                           type="button"
                           onClick={() => saveConsultation(appointment)}
                           disabled={isSaving}
-                          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
                         >
                           {isSaving ? "Saving..." : "Save Consultation Note"}
                         </button>
                         <button
                           type="button"
                           onClick={() => setActiveAppointmentId(null)}
-                          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
                         >
                           Close
                         </button>
@@ -284,17 +296,8 @@ export default function OnlineConsultationPage() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover-lift animate-fade-in-up stagger-5 sticky top-4">
-          <h2 className="text-lg font-bold text-slate-900">Workflow Rules</h2>
-          <div className="mt-5 space-y-3 text-sm text-slate-600">
-            <Rule text="Paid online consultations can be started immediately from this page." />
-            <Rule text="Pending-payment online appointments stay out of the consultation queue." />
-            <Rule text="Clinic and online appointments both support consultation notes." />
-            <Rule text="Doctors can capture status, notes, and prescriptions per appointment." />
-          </div>
-          {isLoading ? <p className="mt-4 text-sm text-slate-500">Loading consultation notes...</p> : null}
-        </div>
       </div>
+      {isLoading ? <p className="text-sm text-slate-500">Loading consultation notes...</p> : null}
     </div>
   );
 }
@@ -344,10 +347,13 @@ function Badge({
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${styles[tone]}`}>{children}</span>;
 }
 
-function Rule({ text }: { text: string }) {
+function Shortcut({ href, label }: { href: string; label: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      {text}
-    </div>
+    <Link
+      href={href}
+      className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+    >
+      {label}
+    </Link>
   );
 }

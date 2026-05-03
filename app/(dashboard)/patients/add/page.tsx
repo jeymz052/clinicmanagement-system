@@ -84,9 +84,7 @@ export default function AddPatientPage() {
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Walk-In Intake</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Add a walk-in patient quickly</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Use this screen at the front desk to register same-day walk-ins, capture contact details, and push them into the patient directory for appointment and billing workflows.
-            </p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Enter the patient details below to create a new walk-in record.</p>
           </div>
 
           <Link
@@ -110,7 +108,7 @@ export default function AddPatientPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_20rem]">
+      <div>
         <form
           onSubmit={handleSubmit}
           className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]"
@@ -210,15 +208,6 @@ export default function AddPatientPage() {
             </Link>
           </div>
         </form>
-
-        <aside className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Walk-In Rules</p>
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <Rule text="Walk-ins are saved to the same patient directory used by appointments and POS billing." />
-            <Rule text="You can edit the record later from the patient management page." />
-            <Rule text="Online consultation payment rules still apply if the patient later books online." />
-          </div>
-        </aside>
       </div>
     </div>
   );
@@ -233,11 +222,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Rule({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-      <span className="mt-1 h-2.5 w-2.5 rounded-full bg-teal-500" />
-      <p>{text}</p>
-    </div>
-  );
-}

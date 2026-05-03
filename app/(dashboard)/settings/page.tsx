@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { SystemSettings } from "@/src/lib/clinic";
@@ -72,25 +73,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="animate-fade-in-down">
-        <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">System and clinic-wide configuration</p>
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <RuleCard
-          title="Clinic Hours"
-          description="Adjust the public-facing clinic opening and closing hours used across schedule management and front-desk operations."
-        />
-        <RuleCard
-          title="Online Consultation"
-          description="Online appointments still require a successful payment before the appointment can be treated as confirmed."
-        />
-        <RuleCard
-          title="Capacity"
-          description="Max patients per hour remains capped by the current scheduling model, so keep this aligned with doctor schedules."
-        />
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(135deg,#f8fffb_0%,#ffffff_100%)] p-6 shadow-[0_24px_60px_rgba(16,185,129,0.10)] animate-fade-in-down">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Settings</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Manage clinic details and hours</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Update the clinic profile, hours, and consultation fee settings.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Shortcut href="/schedules" label="Schedules" />
+            <Shortcut href="/pricing" label="Pricing" />
+            <Shortcut href="/payments" label="Payments" />
+          </div>
+        </div>
       </section>
 
       {feedback ? (
@@ -111,7 +107,7 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-1">
+      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-1">
         <h2 className="text-lg font-bold text-slate-900">General</h2>
         <fieldset disabled={loading || !canEdit || isSaving} className="mt-6 space-y-6">
           <div>
@@ -120,7 +116,7 @@ export default function SettingsPage() {
               type="text"
               value={settings.clinicName}
               onChange={(e) => updateField("clinicName", e.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
             />
           </div>
 
@@ -131,7 +127,7 @@ export default function SettingsPage() {
                 type="email"
                 value={settings.email}
                 onChange={(e) => updateField("email", e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
               />
             </div>
             <div>
@@ -140,7 +136,7 @@ export default function SettingsPage() {
                 type="tel"
                 value={settings.phone}
                 onChange={(e) => updateField("phone", e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
               />
             </div>
           </div>
@@ -151,7 +147,7 @@ export default function SettingsPage() {
               type="text"
               value={settings.address}
               onChange={(e) => updateField("address", e.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
             />
           </div>
 
@@ -162,7 +158,7 @@ export default function SettingsPage() {
                 type="time"
                 value={settings.clinicOpenTime}
                 onChange={(e) => updateField("clinicOpenTime", e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
               />
             </div>
             <div>
@@ -171,7 +167,7 @@ export default function SettingsPage() {
                 type="time"
                 value={settings.clinicCloseTime}
                 onChange={(e) => updateField("clinicCloseTime", e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-3 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
               />
             </div>
           </div>
@@ -198,9 +194,6 @@ export default function SettingsPage() {
                 onChange={(e) => updateField("maxPatientsPerHour", Number(e.target.value))}
                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
-              <p className="mt-1 text-xs text-slate-500">
-                Note: This is a display value. Enforcement is fixed at 5 via the database uniqueness constraint.
-              </p>
             </div>
           </div>
 
@@ -208,7 +201,7 @@ export default function SettingsPage() {
             <button
               type="submit"
               disabled={isSaving || loading}
-              className="rounded-lg bg-teal-700 px-6 py-2 font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-teal-300"
+              className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-6 py-3 font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-teal-300"
             >
               {isSaving ? "Saving..." : "Save Changes"}
             </button>
@@ -219,11 +212,13 @@ export default function SettingsPage() {
   );
 }
 
-function RuleCard({ title, description }: { title: string; description: string }) {
+function Shortcut({ href, label }: { href: string; label: string }) {
   return (
-    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
-    </div>
+    <Link
+      href={href}
+      className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+    >
+      {label}
+    </Link>
   );
 }

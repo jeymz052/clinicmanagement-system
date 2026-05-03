@@ -5,6 +5,7 @@ import {
   type PatientRegistrationFields,
 } from "@/src/lib/patient-registration";
 import { isProtectedSuperAdminEmail } from "@/src/lib/auth/protected-accounts";
+import { assertTrustedOrigin, enforceRateLimit } from "@/src/lib/security";
 import { enqueueNotification } from "@/src/lib/services/notification";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 
@@ -48,6 +49,9 @@ function assertRegisterPayload(payload: unknown): RegisterPayload {
 
 export async function POST(req: Request) {
   try {
+    assertTrustedOrigin(req);
+    enforceRateLimit(req, "auth-register", 10, 60_000);
+
     const body = assertRegisterPayload(await req.json());
     const supabase = getSupabaseAdmin();
 

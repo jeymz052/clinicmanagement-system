@@ -22,7 +22,11 @@ export default function MyAppointmentsPage({
   const upcoming = useMemo(
     () =>
       appointments
-        .filter((appointment) => appointment.date >= today && appointment.status !== "Completed")
+        .filter(
+          (appointment) =>
+            appointment.date >= today &&
+            appointment.status !== "Completed",
+        )
         .sort((left, right) => `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`)),
     [appointments, today],
   );
@@ -35,7 +39,6 @@ export default function MyAppointmentsPage({
     [appointments, today],
   );
 
-  const legacyPendingPaymentCount = appointments.filter((appointment) => appointment.status === "Pending Payment").length;
   const onlineReadyCount = appointments.filter((appointment) => appointment.type === "Online" && appointment.meetingLink).length;
   const nextAppointment = upcoming[0] ?? null;
   const visibleAppointments = activeTab === "upcoming" ? upcoming : history;
@@ -60,12 +63,8 @@ export default function MyAppointmentsPage({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard label="Upcoming" value={upcoming.length} tone="teal" />
-        <MetricCard label="Legacy Unpaid" value={legacyPendingPaymentCount} tone="amber" />
+        <MetricCard label="Completed" value={history.length} tone="amber" />
         <MetricCard label="Meeting Links Ready" value={onlineReadyCount} tone="sky" />
-      </div>
-
-      <div className="rounded-[1.6rem] border border-emerald-100 bg-emerald-50/60 px-4 py-4 text-sm text-slate-700 shadow-sm">
-        Online consultations are paid during booking. They appear here after payment succeeds and the appointment is confirmed.
       </div>
 
       {nextAppointment ? (
@@ -84,14 +83,6 @@ export default function MyAppointmentsPage({
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
-              {nextAppointment.status === "Pending Payment" ? (
-                <Link
-                  href={`/payments?appointmentId=${nextAppointment.id}`}
-                  className="rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-700"
-                >
-                  Resume Legacy Payment
-                </Link>
-              ) : null}
               {nextAppointment.meetingLink ? (
                 <a
                   href={nextAppointment.meetingLink}
@@ -149,14 +140,6 @@ export default function MyAppointmentsPage({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {appointment.status === "Pending Payment" ? (
-                      <Link
-                        href={`/payments?appointmentId=${appointment.id}`}
-                        className="rounded-full border border-amber-200 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
-                      >
-                        Resume Legacy Payment
-                      </Link>
-                    ) : null}
                     {appointment.meetingLink ? (
                       <a
                         href={appointment.meetingLink}
@@ -218,11 +201,11 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
 
 function StatusBadge({ status }: { status: string }) {
   const tone =
-    status === "Pending Payment"
+    status === "In Progress"
       ? "bg-amber-50 text-amber-700"
       : status === "Completed"
         ? "bg-emerald-50 text-emerald-700"
-        : status === "Paid"
+        : status === "Confirmed"
           ? "bg-sky-50 text-sky-700"
           : "bg-teal-50 text-teal-700";
 

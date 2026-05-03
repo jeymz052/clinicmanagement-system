@@ -21,6 +21,10 @@
   display: none;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   min-height: 100%;
@@ -87,6 +91,54 @@ body {
 .animate-soft-pulse   { animation: softPulse  2.5s ease-in-out infinite; }
 .animate-float-slow   { animation: floatSlow  4s ease-in-out infinite; }
 
+.scroll-reveal-up {
+  --reveal-y: 56px;
+}
+
+.scroll-reveal-left {
+  --reveal-x: -56px;
+}
+
+.scroll-reveal-right {
+  --reveal-x: 56px;
+}
+
+@keyframes scrollRevealEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--reveal-x, 0), var(--reveal-y, 0), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.scroll-reveal {
+  --reveal-x: 0px;
+  --reveal-y: 0px;
+  --reveal-scale: 0.975;
+  --reveal-blur: 10px;
+}
+
+.scroll-reveal-ready {
+  opacity: 0;
+  transform: translate3d(var(--reveal-x), var(--reveal-y), 0) scale(var(--reveal-scale));
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity 0.78s ease,
+    transform 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.95s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform, filter;
+}
+
+.scroll-reveal-ready.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  filter: blur(0);
+}
+
 /* Staggered delays for children (apply to elements with animate-fade-in-up) */
 .stagger-1  { animation-delay: 0.04s; }
 .stagger-2  { animation-delay: 0.09s; }
@@ -119,6 +171,21 @@ body {
   .animate-slide-in-left, .animate-pop-in, .animate-soft-pulse,
   .animate-float-slow, .shimmer {
     animation: none !important;
+  }
+  .scroll-reveal,
+  .scroll-reveal-up,
+  .scroll-reveal-left,
+  .scroll-reveal-right {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  .scroll-reveal-ready,
+  .scroll-reveal-ready.is-visible {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
   }
   .hover-lift { transition: none; }
 }

@@ -59,8 +59,8 @@ create table if not exists public.doctors (
   id uuid primary key references public.profiles(id) on delete cascade,
   specialty text not null,
   license_no text unique not null,
-  consultation_fee_clinic numeric(10,2) not null default 0,
-  consultation_fee_online numeric(10,2) not null default 0
+  consultation_fee_clinic numeric(10,2) not null default 350,
+  consultation_fee_online numeric(10,2) not null default 350
 );
 
 -- Slug column for legacy UI bridge (incremental, re-run safe)
@@ -257,7 +257,7 @@ create table if not exists public.system_settings (
   email text not null default '',
   phone text not null default '',
   address text not null default '',
-  online_consultation_fee numeric(10,2) not null default 0,
+  online_consultation_fee numeric(10,2) not null default 350,
   max_patients_per_hour smallint not null default 5 check (max_patients_per_hour between 1 and 20),
   clinic_open_time time not null default '08:00',
   clinic_close_time time not null default '17:00',

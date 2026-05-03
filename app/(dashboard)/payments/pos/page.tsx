@@ -98,12 +98,12 @@ export default function POSBillingPage() {
 
   const billableAppointments = useMemo(
     () =>
-      clinicAppointments.filter((a) => a.status === "Completed"),
+      clinicAppointments.filter((a) => a.status === "In Progress" || a.status === "Completed"),
     [clinicAppointments],
   );
 
   const pendingClinicAppointments = useMemo(
-    () => clinicAppointments.filter((a) => a.status !== "Completed"),
+    () => clinicAppointments.filter((a) => a.status !== "In Progress" && a.status !== "Completed"),
     [clinicAppointments],
   );
 
@@ -198,7 +198,7 @@ export default function POSBillingPage() {
   function issueBill() {
     if (!accessToken) return;
     if (!selectedAppt) {
-      setFeedback({ message: "Pick a completed clinic appointment first.", tone: "error" });
+      setFeedback({ message: "Pick a clinic consultation that is already in progress or already finished.", tone: "error" });
       return;
     }
     startTransition(async () => {
@@ -251,7 +251,7 @@ export default function POSBillingPage() {
         return;
       }
 
-      setFeedback({ message: "Payment accepted. Receipt is ready for printing.", tone: "success" });
+      setFeedback({ message: "Payment accepted. Receipt is ready and the clinic appointment is now completed.", tone: "success" });
     });
   }
 
@@ -290,7 +290,7 @@ export default function POSBillingPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Step 1</p>
-                <h2 className="mt-2 text-xl font-bold text-slate-900">Select completed clinic consultation</h2>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">Select clinic consultation for POS billing</h2>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -300,7 +300,7 @@ export default function POSBillingPage() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Completed clinic appointment</span>
+                <span className="text-sm font-medium text-slate-700">Clinic appointment</span>
                 <select
                   value={selectedApptId}
                   onChange={(event) => setSelectedApptId(event.target.value)}
@@ -310,8 +310,8 @@ export default function POSBillingPage() {
                   <option value="">
                     {billableAppointments.length === 0
                       ? pendingClinicAppointments.length > 0
-                        ? `${pendingClinicAppointments.length} clinic booking(s) found, but none completed yet`
-                        : "No completed clinic visits yet"
+                        ? `${pendingClinicAppointments.length} clinic booking(s) found, but none are ready for POS yet`
+                        : "No clinic visits ready for POS yet"
                       : "Select appointment"}
                   </option>
                   {billableAppointments.map((appt) => (
@@ -329,6 +329,9 @@ export default function POSBillingPage() {
                     <p className="mt-1 text-sm text-slate-500">{formatRange(selectedAppt.start, selectedAppt.end)}</p>
                     <p className="mt-2 text-sm text-emerald-700">
                       Base consultation: {peso(consultationBaseFee)} ({formatDurationLabel(selectedAppt.start, selectedAppt.end)} at {peso(selectedDoctorFees.clinic)}/hr)
+                    </p>
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      Current appointment status: {selectedAppt.status}
                     </p>
                   </>
                 ) : (
@@ -609,7 +612,7 @@ export default function POSBillingPage() {
               </div>
 
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Step 3 - Accept Payment</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Step 3 - Accept Payment</p>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {[
                     { value: "Cash", label: "Cash" },

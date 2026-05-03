@@ -3,7 +3,6 @@
 import { type ReactNode, useState, useTransition } from "react";
 import {
   deleteAppointmentAction,
-  markAppointmentPaidAction,
   updateAppointmentAction,
 } from "@/app/(dashboard)/appointments/actions";
 import { SharedSlotPicker } from "@/src/components/appointments/SharedSlotPicker";
@@ -21,17 +20,10 @@ import {
 } from "@/src/lib/appointments";
 import { getClinicToday } from "@/src/lib/timezone";
 
-type AppointmentListPageProps = {
-  title?: string;
-  description?: string;
-};
-
 const today = getClinicToday();
+const DEFAULT_DOCTOR_ID = "chiara-punzalan";
 
-export default function AppointmentListPage({
-  title = "Appointment List",
-  description = "",
-}: AppointmentListPageProps) {
+export default function AppointmentListPage() {
   const { accessToken, role } = useRole();
   const { doctors } = useDoctors();
   const { appointments, setAppointments, isLoading, error } = useAppointments();
@@ -40,11 +32,12 @@ export default function AppointmentListPage({
   const [draft, setDraft] = useState<AppointmentRecord | null>(null);
   const [isUpdating, startUpdateTransition] = useTransition();
   const summary = getAppointmentSummary(appointments);
+  const primaryDoctor = doctors[0] ?? null;
   const sortedAppointments = [...appointments].sort((left, right) =>
     `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`),
   );
   const canManage = role !== "PATIENT";
-  const activeDraftDoctorId = draft?.doctorId ?? "";
+  const activeDraftDoctorId = primaryDoctor?.slug ?? draft?.doctorId ?? DEFAULT_DOCTOR_ID;
   const activeDraftDate = draft?.date ?? today;
   const activeDraftType = draft?.type ?? "Clinic";
   const {
@@ -56,7 +49,10 @@ export default function AppointmentListPage({
 
   function beginEdit(appointment: AppointmentRecord) {
     setEditingId(appointment.id);
-    setDraft(appointment);
+    setDraft({
+      ...appointment,
+      doctorId: primaryDoctor?.slug ?? appointment.doctorId ?? DEFAULT_DOCTOR_ID,
+    });
     setFeedback(null);
   }
 
@@ -112,67 +108,23 @@ export default function AppointmentListPage({
     });
   }
 
-  function confirmPayment(appointmentId: string) {
-    if (!accessToken) {
-      setFeedback("Sign in again to continue.");
-      return;
-    }
-
-    startUpdateTransition(async () => {
-      try {
-        const checkoutRes = await fetch("/api/v2/payments/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ appointment_id: appointmentId }),
-        });
-        if (checkoutRes.ok) {
-          const { url } = (await checkoutRes.json()) as { url?: string };
-          if (url) {
-            window.location.href = url;
-            return;
-          }
-        }
-      } catch {
-        // Fall back to manual mark-paid flow.
-      }
-
-      const result = await markAppointmentPaidAction(accessToken, appointmentId);
-      setAppointments(result.appointments);
-      setFeedback(result.message);
-    });
-  }
-
   return (
     <div className="space-y-6 pb-8">
-      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Appointments</p>
-            <h1 className="mt-3 text-3xl font-black text-slate-900">{title}</h1>
-          {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
-        </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live booking overview
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <SummaryCard label="Total" value={summary.total} tone="slate" />
         <SummaryCard label="Confirmed / Completed" value={summary.confirmedCount} tone="emerald" />
-        <SummaryCard label="Pending Action" value={summary.pendingCount} tone="amber" />
+        <SummaryCard label="In Progress" value={summary.pendingCount} tone="amber" />
         <SummaryCard label="Online" value={summary.onlineCount} tone="sky" />
       </div>
 
       {feedback ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          {feedback}
+        <div className="rounded-2xl border-l-4 border-emerald-500 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800 shadow-sm">
+          ✓ {feedback}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="rounded-2xl border-l-4 border-red-500 bg-red-50 px-5 py-4 text-sm font-medium text-red-800 shadow-sm">
+          ✕ {error}
         </div>
       ) : null}
 
@@ -183,15 +135,15 @@ export default function AppointmentListPage({
           const isEditing = editingId === appointment.id && draft !== null;
 
           return (
-            <article key={appointment.id} className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(16,185,129,0.10)]">
-              <div className="flex flex-col gap-4 border-b border-emerald-50 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+            <article key={appointment.id} className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:shadow-lg">
+              <div className="flex flex-col gap-5 border-b border-emerald-50 px-6 py-5 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold text-slate-900">{appointment.patientName}</h2>
+                  <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                    <h2 className="text-lg font-bold text-slate-900">{appointment.patientName}</h2>
                     <Badge tone={appointment.type === "Clinic" ? "emerald" : "sky"}>{appointment.type}</Badge>
                     <Badge
                       tone={
-                        appointment.status === "Pending Payment"
+                        appointment.status === "In Progress"
                           ? "amber"
                           : "emerald"
                       }
@@ -199,29 +151,25 @@ export default function AppointmentListPage({
                       {appointment.status}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {doctor?.name ?? "Assigned doctor"} | {formatDisplayDate(appointment.date)} | {formatRange(appointment.start, appointment.end)} | Queue #{appointment.queueNumber}
+                  <p className="text-sm font-medium text-slate-700">
+                    {doctor?.name ?? "Assigned doctor"} · {formatDisplayDate(appointment.date)} · {formatRange(appointment.start, appointment.end)}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">{appointment.reason || "No consultation reason provided."}</p>
+                  <p className="mt-2 text-sm font-semibold text-emerald-700 bg-emerald-50 w-fit px-3 py-1 rounded-full">Queue #{appointment.queueNumber}</p>
+                  <p className="mt-2 text-sm text-slate-600">{appointment.reason || "No consultation reason provided."}</p>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {appointment.type === "Online" && appointment.status === "Pending Payment" ? (
-                    <button type="button" onClick={() => confirmPayment(appointment.id)} className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">
-                      Resume Legacy Payment
-                    </button>
-                  ) : null}
+                <div className="flex flex-wrap items-center gap-2">
                   {appointment.meetingLink ? (
-                    <a href={appointment.meetingLink} target="_blank" rel="noreferrer" className="rounded-full border border-emerald-200 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                    <a href={appointment.meetingLink} target="_blank" rel="noreferrer" className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition">
                       Open Meeting Link
                     </a>
                   ) : null}
                   {canManage && !isEditing ? (
                     <>
-                      <button type="button" onClick={() => beginEdit(appointment)} className="rounded-full border border-emerald-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                      <button type="button" onClick={() => beginEdit(appointment)} className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition">
                         Edit
                       </button>
-                      <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-full border border-red-200 px-4 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-50">
+                      <button type="button" onClick={() => deleteAppointment(appointment.id)} className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition">
                         Cancel
                       </button>
                     </>
@@ -230,33 +178,29 @@ export default function AppointmentListPage({
               </div>
 
               {isEditing ? (
-                <div className="space-y-5 px-5 py-5">
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Patient details</p>
+                <div className="space-y-6 px-6 py-6 bg-gradient-to-b from-white to-emerald-50/20">
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/40 p-5 shadow-sm">
+                      <p className="text-sm font-bold uppercase tracking-widest text-emerald-700">Patient Details</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Patient name" />
-                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Email" />
-                        <input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Phone" />
-                        <input value={draft.reason} onChange={(event) => updateDraft("reason", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" placeholder="Reason" />
+                        <input value={draft.patientName} onChange={(event) => updateDraft("patientName", event.target.value)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200" placeholder="Patient name" />
+                        <input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200" placeholder="Email" />
+                        <input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200" placeholder="Phone" />
+                        <input value={draft.reason} onChange={(event) => updateDraft("reason", event.target.value)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200" placeholder="Reason" />
                       </div>
                     </div>
 
-                    <div className="rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Schedule setup</p>
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/40 p-5 shadow-sm">
+                      <p className="text-sm font-bold uppercase tracking-widest text-emerald-700">Schedule Details</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <select value={draft.doctorId} onChange={(event) => updateDraft("doctorId", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100">
-                          {doctors.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100">
+                        <div className="w-full rounded-lg border border-emerald-300 bg-emerald-100/50 px-4 py-3 text-sm font-bold text-slate-900">
+                          {primaryDoctor?.name ?? getDoctorById(DEFAULT_DOCTOR_ID)?.name ?? "Dra. Chiara C. Punzalan M.D."}
+                        </div>
+                        <select value={draft.type} onChange={(event) => updateDraft("type", event.target.value as AppointmentType)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-white">
                           <option value="Clinic">Clinic</option>
                           <option value="Online">Online</option>
                         </select>
-                        <input type="date" min={today} value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+                        <input type="date" min={today} value={draft.date} onChange={(event) => updateDraft("date", event.target.value)} className="w-full rounded-lg border border-emerald-300 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-white" />
                         {nextAvailableSlot ? (
                           <button
                             type="button"
@@ -265,19 +209,19 @@ export default function AppointmentListPage({
                               updateDraft("start", nextAvailableSlot.slot.start);
                               updateDraft("end", nextAvailableSlot.slot.end);
                             }}
-                            className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                            className="rounded-lg border-2 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
                           >
                             Use next available
                           </button>
                         ) : (
-                          <div className="rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-500">
-                            Pick a date to load available times.
+                          <div className="rounded-lg border border-emerald-300 bg-white px-4 py-3 text-sm text-slate-600">
+                            Pick a date to load times
                           </div>
                         )}
                       </div>
                       {blockedReason ? (
-                        <div className="mt-3 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                          {blockedReason}
+                        <div className="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                          ⚠ {blockedReason}
                         </div>
                       ) : null}
                     </div>
@@ -295,11 +239,11 @@ export default function AppointmentListPage({
                     loading={isLoadingAvailability}
                   />
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                    <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="rounded-full border border-emerald-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                  <div className="flex flex-col gap-3 border-t border-emerald-100 pt-5 sm:flex-row sm:items-center sm:justify-end">
+                    <button type="button" onClick={() => { setEditingId(null); setDraft(null); }} className="order-2 sm:order-1 rounded-lg border border-emerald-300 px-6 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
                       Cancel
                     </button>
-                    <button type="button" onClick={saveDraft} disabled={isUpdating || !draft.start} className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button type="button" onClick={saveDraft} disabled={isUpdating || !draft.start} className="order-1 sm:order-2 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-1 disabled:cursor-not-allowed disabled:opacity-60">
                       {isUpdating ? "Saving..." : "Save Changes"}
                     </button>
                   </div>
@@ -319,15 +263,15 @@ export default function AppointmentListPage({
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "slate" | "emerald" | "amber" | "sky" }) {
   const styles = {
-    slate: "text-slate-900",
-    emerald: "text-emerald-600",
-    amber: "text-amber-600",
-    sky: "text-sky-600",
+    slate: "from-slate-600 to-slate-700 text-slate-600",
+    emerald: "from-emerald-600 to-emerald-700 text-emerald-600",
+    amber: "from-amber-600 to-amber-700 text-amber-600",
+    sky: "from-sky-600 to-sky-700 text-sky-600",
   };
   return (
-    <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_16px_34px_rgba(16,185,129,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:bg-emerald-50/40 hover:shadow-[0_22px_40px_rgba(16,185,129,0.12)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className={`mt-3 text-3xl font-black ${styles[tone]}`}>{value}</p>
+    <div className="group overflow-hidden rounded-2xl border border-emerald-100 bg-white p-5 shadow-md transition-all hover:shadow-lg hover:-translate-y-1">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 group-hover:text-slate-700 transition">{label}</p>
+      <div className={`mt-4 text-4xl font-black bg-gradient-to-r ${styles[tone]} bg-clip-text text-transparent`}>{value}</div>
     </div>
   );
 }

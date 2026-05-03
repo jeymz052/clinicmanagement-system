@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
-import { HttpError, type Actor } from "@/src/lib/http";
+import { HttpError, isStaff, type Actor } from "@/src/lib/http";
 import type {
   Appointment,
   OnlineBookingReservation,
@@ -9,17 +9,26 @@ import type {
 } from "@/src/lib/db/types";
 import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
-import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
+import { calculateOnlineConsultationCharge } from "@/src/lib/consultation-pricing";
 import { createPayMongoCheckoutSession, mapCheckoutMethods } from "@/src/lib/services/paymongo";
+import { createStripeCheckoutSessionForReservation } from "@/src/lib/services/stripe";
 import {
   resolveBookingPatientId,
+  resolveAssignedDoctorUuid,
   validateSharedSlotOrThrow,
   type AppointmentCreatePayload,
 } from "@/src/lib/server/appointments-store";
-import { addOneHour, resolveDoctorIdBySlug } from "@/src/lib/server/legacy-bridge";
+import { addOneHour } from "@/src/lib/server/legacy-bridge";
 
 const MEETING_BASE = process.env.MEETING_BASE_URL ?? "https://meet.chiara.clinic";
-const ONLINE_ALLOWED_METHODS = new Set<PaymentMethod>(["QR", "GCash", "Card", "BankTransfer"]);
+const DEFAULT_MANUAL_TRANSFER_INSTRUCTIONS =
+  "Send the transfer to the clinic's bank account, then wait for staff verification. Your appointment stays unconfirmed until payment is marked as paid.";
+
+export type OnlineCheckoutOption =
+  | "paymongo_gcash"
+  | "paymongo_card"
+  | "stripe_card"
+  | "bank_transfer";
 
 export type OnlineCheckoutBookingInput = Pick<
   AppointmentCreatePayload,
@@ -32,10 +41,41 @@ function buildMeetingLink(appt: Appointment) {
 }
 
 function paymentMethodFromProvider(provider: string): PaymentMethod {
-  if (provider === "paymongo") return "Card";
-  if (provider === "gcash") return "GCash";
-  if (provider === "qr") return "QR";
+  if (provider === "paymongo_card" || provider === "stripe" || provider === "stripe_card") return "Card";
+  if (provider === "paymongo_gcash" || provider === "gcash" || provider === "qr") return "QR";
   return "BankTransfer";
+}
+
+function getManualTransferInstructions() {
+  return process.env.ONLINE_BANK_TRANSFER_INSTRUCTIONS ?? DEFAULT_MANUAL_TRANSFER_INSTRUCTIONS;
+}
+
+function buildManualTransferReference(reservationId: string) {
+  return `BT-${reservationId.slice(0, 8).toUpperCase()}`;
+}
+
+async function findReservationByPaymentRef(
+  provider: string,
+  provider_ref: string,
+): Promise<OnlineBookingReservation | null> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: exact, error: exactError } = await supabase
+    .from("online_booking_reservations")
+    .select("*")
+    .eq("payment_provider", provider)
+    .eq("payment_ref", provider_ref)
+    .maybeSingle<OnlineBookingReservation>();
+  if (exactError) throw exactError;
+  if (exact) return exact;
+
+  const { data: fallback, error: fallbackError } = await supabase
+    .from("online_booking_reservations")
+    .select("*")
+    .eq("payment_ref", provider_ref)
+    .maybeSingle<OnlineBookingReservation>();
+  if (fallbackError) throw fallbackError;
+  return fallback ?? null;
 }
 
 async function notifyOnlineConfirmed(appt: Appointment, meetingLink: string) {
@@ -60,20 +100,130 @@ async function notifyOnlineConfirmed(appt: Appointment, meetingLink: string) {
 }
 
 export async function createOnlineCheckoutSession(
-  input: OnlineCheckoutBookingInput,
+  input: OnlineCheckoutBookingInput & {
+    reservationId?: string;
+    checkoutOption?: OnlineCheckoutOption;
+  },
   actor: Actor,
-): Promise<{ url: string; reservation: OnlineBookingReservation }> {
+): Promise<{
+  url: string | null;
+  reservation: OnlineBookingReservation;
+  checkoutMode: "redirect" | "manual";
+  instructions?: string;
+  paymentReference?: string;
+}> {
   if (actor.profile.role !== "patient" && actor.profile.role !== "secretary" && actor.profile.role !== "super_admin" && actor.profile.role !== "admin") {
     throw new HttpError(403, "Forbidden");
   }
 
-  const doctorId = await resolveDoctorIdBySlug(input.doctorId);
+  const doctorId = await resolveAssignedDoctorUuid();
   const patientId = await resolveBookingPatientId(input, {
     actorRole: actor.profile.role === "patient" ? "PATIENT" : undefined,
     actorUserId: actor.profile.role === "patient" ? actor.id : undefined,
   });
   const start_time = `${input.start}:00`;
   const end_time = `${addOneHour(input.start)}:00`;
+  await getDoctor(doctorId);
+  const amount = calculateOnlineConsultationCharge(start_time, end_time);
+
+  const supabase = getSupabaseAdmin();
+  const checkoutOption = input.checkoutOption ?? "paymongo_gcash";
+
+  // If a reservationId was provided, reuse the existing reservation
+  if (input.reservationId) {
+    const { data: existing, error: existingErr } = await supabase
+      .from("online_booking_reservations")
+      .select("*")
+      .eq("id", input.reservationId)
+      .maybeSingle<OnlineBookingReservation>();
+    if (existingErr) throw existingErr;
+    if (!existing) throw new HttpError(404, "Reservation not found");
+    if (existing.status !== "Pending") throw new HttpError(409, "Reservation is not pending");
+
+    try {
+      if (checkoutOption === "bank_transfer") {
+        const paymentReference = existing.payment_ref ?? buildManualTransferReference(existing.id);
+        const { data: updated, error: updateError } = await supabase
+          .from("online_booking_reservations")
+          .update({
+            payment_provider: "bank_transfer",
+            payment_ref: paymentReference,
+            status: "Pending",
+          })
+          .eq("id", existing.id)
+          .select()
+          .single<OnlineBookingReservation>();
+        if (updateError) throw updateError;
+
+        return {
+          url: null,
+          reservation: updated,
+          checkoutMode: "manual",
+          instructions: getManualTransferInstructions(),
+          paymentReference,
+        };
+      }
+
+      if (checkoutOption === "stripe_card") {
+        const checkout = await createStripeCheckoutSessionForReservation({
+          reservation: existing,
+          customerEmail: input.email,
+        });
+
+        const { data: updated, error: updateError } = await supabase
+          .from("online_booking_reservations")
+          .update({ payment_provider: "stripe", payment_ref: checkout.session.id })
+          .eq("id", existing.id)
+          .select()
+          .single<OnlineBookingReservation>();
+        if (updateError) throw updateError;
+
+        return {
+          url: checkout.session.url,
+          reservation: updated,
+          checkoutMode: "redirect",
+        };
+      }
+
+      const checkout = await createPayMongoCheckoutSession({
+        description: `Online consultation on ${existing.appointment_date}`,
+        amount: existing.amount,
+        customerEmail: input.email,
+        customerName: input.patientName,
+        customerPhone: input.phone,
+        paymentMethods: mapCheckoutMethods([checkoutOption === "paymongo_card" ? "Card" : "GCash"]),
+        successPath: `/appointments?reservation_paid=${encodeURIComponent(existing.id)}`,
+        metadata: { reservation_id: existing.id },
+      });
+
+      const { data: updated, error: updateError } = await supabase
+        .from("online_booking_reservations")
+        .update({
+          payment_provider: checkoutOption === "paymongo_card" ? "paymongo_card" : "paymongo_gcash",
+          payment_ref: checkout.sessionId,
+        })
+        .eq("id", existing.id)
+        .select()
+        .single<OnlineBookingReservation>();
+      if (updateError) throw updateError;
+
+      return {
+        url: checkout.checkoutUrl,
+        reservation: updated,
+        checkoutMode: "redirect",
+      };
+    } catch (error) {
+      if (checkoutOption !== "bank_transfer") {
+        await supabase
+          .from("online_booking_reservations")
+          .update({ status: "Failed" })
+          .eq("id", existing.id);
+      }
+      throw error;
+    }
+  }
+
+  // Otherwise create a new reservation as before
   const { queueNumber } = await validateSharedSlotOrThrow({
     doctorUuid: doctorId,
     date: input.date,
@@ -82,14 +232,6 @@ export async function createOnlineCheckoutSession(
     type: "Online",
   });
 
-  const doctor = await getDoctor(doctorId);
-  const amount = calculateConsultationCharge(
-    Number(doctor.consultation_fee_online),
-    start_time,
-    end_time,
-  );
-
-  const supabase = getSupabaseAdmin();
   const { data: reservation, error: reservationError } = await supabase
     .from("online_booking_reservations")
     .insert({
@@ -108,23 +250,65 @@ export async function createOnlineCheckoutSession(
   if (reservationError) throw reservationError;
 
   try {
+    if (checkoutOption === "bank_transfer") {
+      const paymentReference = buildManualTransferReference(reservation.id);
+      const { data: updated, error: updateError } = await supabase
+        .from("online_booking_reservations")
+        .update({
+          payment_provider: "bank_transfer",
+          payment_ref: paymentReference,
+          status: "Pending",
+        })
+        .eq("id", reservation.id)
+        .select()
+        .single<OnlineBookingReservation>();
+      if (updateError) throw updateError;
+
+      return {
+        url: null,
+        reservation: updated,
+        checkoutMode: "manual",
+        instructions: getManualTransferInstructions(),
+        paymentReference,
+      };
+    }
+
+    if (checkoutOption === "stripe_card") {
+      const checkout = await createStripeCheckoutSessionForReservation({
+        reservation,
+        customerEmail: input.email,
+      });
+
+      const { data: updated, error: updateError } = await supabase
+        .from("online_booking_reservations")
+        .update({ payment_provider: "stripe", payment_ref: checkout.session.id })
+        .eq("id", reservation.id)
+        .select()
+        .single<OnlineBookingReservation>();
+      if (updateError) throw updateError;
+
+      return {
+        url: checkout.session.url,
+        reservation: updated,
+        checkoutMode: "redirect",
+      };
+    }
+
     const checkout = await createPayMongoCheckoutSession({
       description: `Online consultation on ${reservation.appointment_date}`,
       amount,
       customerEmail: input.email,
       customerName: input.patientName,
       customerPhone: input.phone,
-      paymentMethods: mapCheckoutMethods(["Card", "GCash"]),
-      successPath: `/payments?provider=paymongo&reservation_id=${encodeURIComponent(reservation.id)}`,
-      metadata: {
-        reservation_id: reservation.id,
-      },
+      paymentMethods: mapCheckoutMethods([checkoutOption === "paymongo_card" ? "Card" : "GCash"]),
+      successPath: `/appointments?reservation_paid=${encodeURIComponent(reservation.id)}`,
+      metadata: { reservation_id: reservation.id },
     });
 
     const { data: updated, error: updateError } = await supabase
       .from("online_booking_reservations")
       .update({
-        payment_provider: "paymongo",
+        payment_provider: checkoutOption === "paymongo_card" ? "paymongo_card" : "paymongo_gcash",
         payment_ref: checkout.sessionId,
       })
       .eq("id", reservation.id)
@@ -135,68 +319,14 @@ export async function createOnlineCheckoutSession(
     return {
       url: checkout.checkoutUrl,
       reservation: updated,
+      checkoutMode: "redirect",
     };
   } catch (error) {
-    await supabase
-      .from("online_booking_reservations")
-      .update({ status: "Failed" })
-      .eq("id", reservation.id);
+    if (checkoutOption !== "bank_transfer") {
+      await supabase.from("online_booking_reservations").update({ status: "Failed" }).eq("id", reservation.id);
+    }
     throw error;
   }
-}
-
-export async function createPaymentIntent(
-  appointmentId: string,
-  method: PaymentMethod,
-  actor: Actor,
-): Promise<Payment> {
-  if (!ONLINE_ALLOWED_METHODS.has(method)) {
-    throw new HttpError(400, "Online consultations only accept GCash/QR, Card, or Bank Transfer.");
-  }
-
-  const appt = await getAppointment(appointmentId);
-  if (actor.profile.role === "patient" && actor.id !== appt.patient_id)
-    throw new HttpError(403, "Forbidden");
-  if (appt.appointment_type !== "Online")
-    throw new HttpError(400, "Payment intent only applies to online consultations");
-  if (appt.status !== "PendingPayment")
-    throw new HttpError(400, `Cannot create payment for status ${appt.status}`);
-
-  const doctor = await getDoctor(appt.doctor_id);
-  const amount = calculateConsultationCharge(
-    Number(doctor.consultation_fee_online),
-    appt.start_time,
-    appt.end_time,
-  );
-
-  const supabase = getSupabaseAdmin();
-  await supabase
-    .from("payments")
-    .update({ status: "Failed" })
-    .eq("appointment_id", appt.id)
-    .eq("status", "Pending");
-
-  const { data, error } = await supabase
-    .from("payments")
-    .insert({
-      appointment_id: appt.id,
-      amount,
-      method,
-      status: "Pending",
-      provider:
-        method === "Card"
-          ? "paymongo"
-          : method === "GCash"
-            ? "gcash"
-            : method === "QR"
-              ? "qr"
-              : "bank_transfer",
-      provider_ref: `intent_${randomUUID()}`,
-    })
-    .select()
-    .single<Payment>();
-  if (error) throw error;
-  return data;
 }
 
 export async function listOnlinePayments(
@@ -236,97 +366,6 @@ export async function listOnlinePayments(
     ...payment,
     appointment: payment.appointment_id ? appointmentById.get(payment.appointment_id) ?? null : null,
   }));
-}
-
-export async function setPaymentStatusById(
-  paymentId: string,
-  nextStatus: "Paid" | "Failed",
-  actor: Actor,
-): Promise<{ appointment: Appointment | null; payment: Payment }> {
-  const supabase = getSupabaseAdmin();
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", paymentId)
-    .single<Payment>();
-  if (error || !payment) throw new HttpError(404, "Payment not found");
-
-  if (!payment.appointment_id) {
-    throw new HttpError(400, "This payment is not linked to an online consultation.");
-  }
-
-  const appointment = await getAppointment(payment.appointment_id);
-  if (appointment.appointment_type !== "Online") {
-    throw new HttpError(400, "Only online consultation payments are supported here.");
-  }
-  if (actor.profile.role === "patient" && actor.id !== appointment.patient_id) {
-    throw new HttpError(403, "Forbidden");
-  }
-
-  return nextStatus === "Paid"
-    ? confirmExistingPaymentById(payment.id)
-    : { payment: await failExistingPaymentById(payment.id), appointment };
-}
-
-export async function confirmExistingPaymentById(
-  paymentId: string,
-  options: { provider?: string; provider_ref?: string | null } = {},
-): Promise<{ appointment: Appointment | null; payment: Payment }> {
-  const supabase = getSupabaseAdmin();
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .update({
-      status: "Paid",
-      paid_at: new Date().toISOString(),
-      ...(options.provider ? { provider: options.provider } : {}),
-      ...(options.provider_ref !== undefined ? { provider_ref: options.provider_ref } : {}),
-    })
-    .eq("id", paymentId)
-    .select()
-    .single<Payment>();
-  if (error) throw error;
-
-  let appt: Appointment | null = null;
-  if (payment.appointment_id) {
-    appt = await getAppointment(payment.appointment_id);
-    if (appt.status === "PendingPayment") {
-      const link = buildMeetingLink(appt);
-      const { data: updated, error: apptErr } = await supabase
-        .from("appointments")
-        .update({ status: "Confirmed", meeting_link: link })
-        .eq("id", appt.id)
-        .select()
-        .single<Appointment>();
-      if (apptErr) throw apptErr;
-      appt = updated;
-      await notifyOnlineConfirmed(appt, link);
-    }
-  }
-
-  return { payment, appointment: appt };
-}
-
-export async function failExistingPaymentById(paymentId: string): Promise<Payment> {
-  const supabase = getSupabaseAdmin();
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .update({ status: "Failed" })
-    .eq("id", paymentId)
-    .select()
-    .single<Payment>();
-  if (error) throw error;
-
-  if (payment.appointment_id) {
-    const appt = await getAppointment(payment.appointment_id);
-    await enqueueNotification({
-      user_id: appt.patient_id,
-      template: "appointment_payment_failed",
-      channels: ["email"],
-      payload: { appointment_id: appt.id },
-    });
-  }
-
-  return payment;
 }
 
 async function confirmReservationPayment(
@@ -446,18 +485,6 @@ export async function confirmPaymentByRef(
     let appt: Appointment | null = null;
     if (paid.appointment_id) {
       appt = await getAppointment(paid.appointment_id);
-      if (appt.status === "PendingPayment") {
-        const link = buildMeetingLink(appt);
-        const { data: updated, error: apptErr } = await supabase
-          .from("appointments")
-          .update({ status: "Confirmed", meeting_link: link })
-          .eq("id", appt.id)
-          .select()
-          .single<Appointment>();
-        if (apptErr) throw apptErr;
-        appt = updated;
-        await notifyOnlineConfirmed(appt, link);
-      }
     }
     return { payment: paid, appointment: appt };
   }
@@ -469,18 +496,19 @@ export async function confirmPaymentByRef(
     .eq("payment_ref", provider_ref)
     .maybeSingle<OnlineBookingReservation>();
   if (reservationError) throw reservationError;
-  if (!reservation) throw new HttpError(404, "Payment not found");
+  const resolvedReservation = reservation ?? await findReservationByPaymentRef(provider, provider_ref);
+  if (!resolvedReservation) throw new HttpError(404, "Payment not found");
 
   const result = await confirmReservationPayment(
-    reservation.status === "Pending"
-      ? reservation
-      : { ...reservation, status: "Paid" },
+    resolvedReservation.status === "Pending"
+      ? resolvedReservation
+      : { ...resolvedReservation, status: "Paid" },
   );
 
   await supabase
     .from("online_booking_reservations")
     .update({ status: "Paid" })
-    .eq("id", reservation.id)
+    .eq("id", resolvedReservation.id)
     .in("status", ["Pending", "Paid"]);
 
   return result;
@@ -516,31 +544,87 @@ export async function failPaymentByRef(provider: string, provider_ref: string): 
     .eq("payment_provider", provider)
     .eq("payment_ref", provider_ref)
     .select()
-    .single<OnlineBookingReservation>();
+    .maybeSingle<OnlineBookingReservation>();
   if (reservationError) throw reservationError;
+
+  const resolvedReservation = reservation
+    ?? await (async () => {
+      const fallback = await findReservationByPaymentRef(provider, provider_ref);
+      if (!fallback) return null;
+      const { data: updated, error: updateError } = await supabase
+        .from("online_booking_reservations")
+        .update({ status: "Failed" })
+        .eq("id", fallback.id)
+        .select()
+        .single<OnlineBookingReservation>();
+      if (updateError) throw updateError;
+      return updated;
+    })();
+  if (!resolvedReservation) throw new HttpError(404, "Payment not found");
+
+  await enqueueNotification({
+    user_id: resolvedReservation.patient_id,
+    template: "appointment_payment_failed",
+    channels: ["email"],
+    payload: { reservation_id: resolvedReservation.id },
+  });
+
+  if (!resolvedReservation.appointment_id) {
+    return {
+      id: `failed-${resolvedReservation.id}`,
+      appointment_id: null,
+      billing_id: null,
+      amount: resolvedReservation.amount,
+      method: paymentMethodFromProvider(resolvedReservation.payment_provider ?? provider),
+      status: "Failed",
+      provider: resolvedReservation.payment_provider ?? provider,
+      provider_ref,
+      paid_at: null,
+      created_at: new Date().toISOString(),
+    };
+  }
 
   const { data: syntheticPayment, error: syntheticError } = await supabase
     .from("payments")
     .insert({
-      appointment_id: reservation.appointment_id,
-      amount: reservation.amount,
-      method: paymentMethodFromProvider(provider),
+      appointment_id: resolvedReservation.appointment_id,
+      amount: resolvedReservation.amount,
+      method: paymentMethodFromProvider(resolvedReservation.payment_provider ?? provider),
       status: "Failed",
-      provider,
+      provider: resolvedReservation.payment_provider ?? provider,
       provider_ref,
     })
     .select()
     .single<Payment>();
   if (syntheticError) throw syntheticError;
 
-  await enqueueNotification({
-    user_id: reservation.patient_id,
-    template: "appointment_payment_failed",
-    channels: ["email"],
-    payload: { reservation_id: reservation.id },
-  });
-
   return syntheticPayment;
+}
+
+export async function confirmManualBankTransferReservation(
+  reservationId: string,
+  actor: Actor,
+) {
+  if (!isStaff(actor.profile.role)) {
+    throw new HttpError(403, "Only clinic staff can confirm bank transfers.");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: reservation, error } = await supabase
+    .from("online_booking_reservations")
+    .select("*")
+    .eq("id", reservationId)
+    .maybeSingle<OnlineBookingReservation>();
+  if (error) throw error;
+  if (!reservation) throw new HttpError(404, "Reservation not found");
+  if (reservation.payment_provider !== "bank_transfer") {
+    throw new HttpError(400, "Reservation is not awaiting bank transfer verification.");
+  }
+  if (!reservation.payment_ref) {
+    throw new HttpError(400, "Reservation has no bank transfer reference.");
+  }
+
+  return confirmPaymentByRef("bank_transfer", reservation.payment_ref);
 }
 
 export async function reapUnpaidOnline(minutes = 30) {

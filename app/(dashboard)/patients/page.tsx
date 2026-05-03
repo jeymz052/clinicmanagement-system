@@ -176,9 +176,7 @@ export default function PatientsPage() {
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Patient Management</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Manage registered and walk-in patients</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Secretary and clinic staff can add walk-ins, maintain patient records, and keep the front desk ready for both clinic and online appointments.
-            </p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Search, update, and organize patient records in one place.</p>
           </div>
 
           {canManage ? (
@@ -208,55 +206,44 @@ export default function PatientsPage() {
         <MetricCard label="Registered" value={registeredPatients} />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <div className="grid gap-4 md:grid-cols-3">
-            <label className="block text-sm font-medium text-slate-700">
-              Search patient
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Name, email, or phone"
-                className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-              />
-            </label>
+      <section className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="block text-sm font-medium text-slate-700">
+            Search patient
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Name, email, or phone"
+              className="mt-2 w-full rounded-[1rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
 
-            <label className="block text-sm font-medium text-slate-700">
-              Patient type
-              <select
-                value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value as PatientFilter)}
-                className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-              >
-                <option value="all">All patients</option>
-                <option value="registered">Registered only</option>
-                <option value="walk-in">Walk-ins only</option>
-              </select>
-            </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Patient type
+            <select
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value as PatientFilter)}
+              className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
+              <option value="all">All patients</option>
+              <option value="registered">Registered only</option>
+              <option value="walk-in">Walk-ins only</option>
+            </select>
+          </label>
 
-            <label className="block text-sm font-medium text-slate-700">
-              Status
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-                className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-              >
-                <option value="all">All statuses</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Front Desk Rules</p>
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <Rule text="Secretary and clinic staff can add walk-in patients directly from the patient module." />
-            <Rule text="Patient records support full add, edit, and deactivate actions." />
-            <Rule text="Walk-ins can be tracked separately from registered patients for faster intake." />
-          </div>
+          <label className="block text-sm font-medium text-slate-700">
+            Status
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+              className="mt-2 w-full rounded-[1rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
+              <option value="all">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </label>
         </div>
       </section>
 
@@ -427,14 +414,6 @@ function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Rule({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-      <span className="mt-1 h-2.5 w-2.5 rounded-full bg-teal-500" />
-      <p>{text}</p>
-    </div>
-  );
-}
 
 type PatientFormModalProps = {
   title: string;

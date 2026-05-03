@@ -47,7 +47,6 @@ type DashboardHeaderProps = {
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/appointments": "Appointments",
-  "/appointments/list": "Appointment List",
   "/appointments/calendar": "Appointment Calendar",
   "/appointments/my": "My Appointments",
   "/patients": "Patients",
@@ -61,7 +60,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/pricing": "Pricing",
   "/reports": "Reports",
   "/schedules": "Schedules",
-  "/schedules/slots": "Time Slots",
+  "/schedules/slots": "Blocked Dates",
   "/settings": "Settings",
   "/profile": "Profile",
   "/help": "Help Center",
@@ -106,7 +105,7 @@ function mapTemplateToLabel(template: string) {
     case "appointment_booked":
       return "Appointment Booking";
     case "appointment_confirmed":
-      return "Appointment Approval";
+      return "Appointment Confirmed";
     case "appointment_payment_success":
     case "appointment_paid_and_confirmed":
       return "Payment Success";
@@ -115,9 +114,9 @@ function mapTemplateToLabel(template: string) {
     case "appointment_payment_failed":
       return "Payment Issue";
     case "appointment_reminder_24h":
-      return "24 Hours Before Appointment";
+      return "24-Hour Reminder";
     case "appointment_reminder_6h":
-      return "Appointment Reminder";
+      return "Upcoming Reminder";
     case "billing_issued":
       return "Billing Notice";
     case "appointment_cancelled":
@@ -233,7 +232,7 @@ export function DashboardHeader({
           <div className="relative" ref={notifMenuRef}>
             <button
               type="button"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-teal-200 hover:text-teal-700 sm:h-12 sm:w-12"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-600 bg-white text-emerald-600 shadow-sm transition hover:border-emerald-500 hover:text-emerald-700 sm:h-12 sm:w-12"
               aria-label="Notifications"
               onClick={() => {
                 if (!isNotifOpen) {
@@ -305,14 +304,14 @@ export function DashboardHeader({
           <div className="relative" ref={profileMenuRef}>
             <button
               type="button"
-              className="flex min-w-0 max-w-[12rem] items-center gap-2 rounded-[1.4rem] border-2 border-slate-900 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:border-teal-700 hover:shadow-md sm:max-w-none sm:gap-3 sm:rounded-[1.75rem] sm:px-3 sm:py-2 sm:pr-4"
+              className="flex min-w-0 max-w-[12rem] items-center gap-2 rounded-[1.4rem] border-2 border-emerald-600 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:border-emerald-500 hover:shadow-md sm:max-w-none sm:gap-3 sm:rounded-[1.75rem] sm:px-3 sm:py-2 sm:pr-4"
               onClick={() => {
                 setIsMenuOpen((current) => !current);
                 setIsNotifOpen(false);
               }}
               aria-label="Open account menu"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-[3px] border-slate-900 bg-[radial-gradient(circle_at_top,#163b7a_0%,#0f2147_80%)] text-xs font-bold text-white sm:h-11 sm:w-11 sm:border-4 sm:text-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-[3px] border-emerald-600 bg-[radial-gradient(circle_at_top,#163b7a_0%,#0f2147_80%)] text-xs font-bold text-white sm:h-11 sm:w-11 sm:border-4 sm:text-sm">
                 {initials}
               </div>
 

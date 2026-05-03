@@ -260,7 +260,7 @@ export async function startConsultation(id: string, actor: Actor) {
   const appt = await getAppointment(id);
   if (actor.profile.role === "doctor" && actor.id !== appt.doctor_id)
     throw new HttpError(403, "Not your appointment");
-  if (appt.status === "PendingPayment")
+  if (appt.status === "Cancelled")
     throw new HttpError(400, "Cannot start — online payment not confirmed");
   if (appt.status !== "Confirmed")
     throw new HttpError(400, `Cannot start from status ${appt.status}`);

@@ -1,4 +1,4 @@
-import { HttpError, httpError, ok, requireActor } from "@/src/lib/http";
+import { HttpError, httpError, ok } from "@/src/lib/http";
 import type { ApptType } from "@/src/lib/db/types";
 import {
   buildSharedDayAvailability,
@@ -8,8 +8,6 @@ import { resolveDoctorIdBySlug } from "@/src/lib/server/legacy-bridge";
 
 export async function GET(req: Request) {
   try {
-    await requireActor(req);
-
     const { searchParams } = new URL(req.url);
     const doctorId = searchParams.get("doctor_id");
     const date = searchParams.get("date");

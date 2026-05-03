@@ -12,7 +12,6 @@ type PermissionAction =
   | "schedules.manage"
   | "settings.read"
   | "users.manage"
-  | "payments.online"
   | "payments.pos";
 
 const PERMISSION_MAP: Record<PermissionAction, UserRole[]> = {
@@ -27,7 +26,6 @@ const PERMISSION_MAP: Record<PermissionAction, UserRole[]> = {
   "schedules.manage": ["SUPER_ADMIN", "DOCTOR"],
   "settings.read": ["SUPER_ADMIN", "DOCTOR"],
   "users.manage": ["SUPER_ADMIN", "DOCTOR"],
-  "payments.online": ["SUPER_ADMIN", "SECRETARY", "DOCTOR", "PATIENT"],
   "payments.pos": ["SUPER_ADMIN", "SECRETARY", "DOCTOR"],
 };
 

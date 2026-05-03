@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { RoleProvider } from "@/src/components/layout/RoleProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ClinicOS - Clinic Management System",
+  title: "Chiara Clinic",
   description: "Production-ready clinic operations dashboard",
+  icons: {
+    icon: "/images/favicon.png?v=2",
+    apple: "/images/favicon.png?v=2",
+  },
 };
 
 export default function RootLayout({
@@ -27,7 +32,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <RoleProvider>{children}</RoleProvider>
+      </body>
     </html>
   );
 }

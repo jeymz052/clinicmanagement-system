@@ -24,7 +24,7 @@ export function useAppointmentAvailability(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!accessToken || !doctorId || !date) {
+    if (!doctorId || !date) {
       setData(null);
       setIsLoading(false);
       return;
@@ -43,7 +43,7 @@ export function useAppointmentAvailability(
           scan_days: "14",
         });
         const response = await fetch(`/api/v2/appointments/availability?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
           cache: "no-store",
           signal: controller.signal,
         });

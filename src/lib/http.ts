@@ -48,6 +48,7 @@ export async function getActor(req: Request): Promise<Actor | null> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
+  if (!data.user.email_confirmed_at) return null;
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")

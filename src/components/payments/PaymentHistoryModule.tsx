@@ -184,7 +184,7 @@ export function PaymentHistoryModule() {
                 : "text-slate-600 hover:text-emerald-700"
             }`}
           >
-            Online Payment
+            Online Payments
           </button>
           <button
             type="button"
@@ -195,7 +195,7 @@ export function PaymentHistoryModule() {
                 : "text-slate-600 hover:text-emerald-700"
             }`}
           >
-            POS Billing
+            Clinic POS
           </button>
         </div>
       </div>

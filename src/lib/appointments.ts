@@ -3,8 +3,6 @@ export type AppointmentType = "Clinic" | "Online";
 export type AppointmentStatus =
   | "Confirmed"
   | "In Progress"
-  | "Paid"
-  | "Pending Payment"
   | "Completed";
 
 export type Doctor = {
@@ -67,6 +65,7 @@ export const SLOT_TEMPLATES_BY_DOCTOR: Record<string, SlotTemplate[]> = {
     { start: "13:00", end: "14:00", mode: "Both" },
     { start: "14:00", end: "15:00", mode: "Both" },
     { start: "15:00", end: "16:00", mode: "Both" },
+    { start: "16:00", end: "17:00", mode: "Both" },
   ],
 };
 
@@ -202,7 +201,7 @@ export function getAppointmentSummary(appointments: AppointmentRecord[]) {
     (appointment) => appointment.status === "Confirmed" || appointment.status === "Completed",
   ).length;
   const pendingCount = appointments.filter(
-    (appointment) => appointment.status === "Pending Payment",
+    (appointment) => appointment.status === "In Progress",
   ).length;
 
   return {

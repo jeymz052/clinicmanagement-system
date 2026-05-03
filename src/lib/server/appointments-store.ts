@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
 import type { Appointment as V2Appointment } from "@/src/lib/db/types";
 import type { AuthenticatedUser } from "@/src/lib/auth/server-auth";
@@ -20,8 +19,8 @@ import {
   getUnavailabilityForDate,
 } from "@/src/lib/services/schedule";
 import { findNextAvailableSharedSlot } from "@/src/lib/services/appointment-availability";
-import { calculateConsultationCharge } from "@/src/lib/consultation-pricing";
 import { enqueueNotification } from "@/src/lib/services/notification";
+import { recalculateQueueNumbersForSlot } from "@/src/lib/services/maintenance";
 
 export type AppointmentCreatePayload = {
   patientName: string;
@@ -39,11 +38,10 @@ type AppointmentCreateContext = {
 };
 
 export type AppointmentUpdatePayload = AppointmentCreatePayload & { id: string };
+const ASSIGNED_DOCTOR_SLUG = "chiara-punzalan";
 
-const MEETING_BASE = process.env.MEETING_BASE_URL ?? "https://meet.chiara.clinic";
-
-function buildMeetingLink(apptId: string) {
-  return `${MEETING_BASE}/${apptId}-${randomUUID().slice(0, 8)}`;
+export async function resolveAssignedDoctorUuid() {
+  return resolveDoctorIdBySlug(ASSIGNED_DOCTOR_SLUG);
 }
 
 function normalizeTime(time: string) {
@@ -300,6 +298,7 @@ export async function readAppointments(
   let q = supabase
     .from("appointments")
     .select("*")
+    .neq("status", "PendingPayment")
     .neq("status", "Cancelled")
     .neq("status", "NoShow");
   if (patientId) q = q.eq("patient_id", patientId);
@@ -327,7 +326,7 @@ export async function createPersistedAppointmentWithContext(
 ) {
   const supabase = getSupabaseAdmin();
   try {
-    const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
+    const doctorUuid = await resolveAssignedDoctorUuid();
     if (payload.type === "Online") {
       throw new Error("Online consultations require payment first. Start checkout to confirm the slot.");
     }
@@ -409,7 +408,7 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
       };
     }
 
-    const doctorUuid = await resolveDoctorIdBySlug(payload.doctorId);
+    const doctorUuid = await resolveAssignedDoctorUuid();
     const start_time = `${payload.start}:00`;
     const end_time = `${addOneHour(payload.start)}:00`;
     if (payload.type === "Online" && existing.appointment_type !== "Online") {
@@ -430,14 +429,10 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
 
     const status =
       payload.type === "Online"
-        ? existing.status === "Confirmed" && existing.meeting_link
-          ? "Confirmed"
-          : "PendingPayment"
+        ? existing.status
         : existing.status === "Completed"
           ? "Completed"
-          : existing.status === "Confirmed"
-            ? "Confirmed"
-            : "Confirmed";
+          : "Confirmed";
 
     const meeting_link = payload.type === "Online" ? existing.meeting_link : null;
 
@@ -482,11 +477,27 @@ export async function updatePersistedAppointment(payload: AppointmentUpdatePaylo
 
 export async function deletePersistedAppointment(appointmentId: string) {
   const supabase = getSupabaseAdmin();
-  const { data: appt } = await supabase
+  const { data: appt, error: fetchErr } = await supabase
     .from("appointments")
-    .select("id, patient_id")
+    .select("id, patient_id, doctor_id, appointment_date, start_time, end_time")
     .eq("id", appointmentId)
-    .maybeSingle<{ id: string; patient_id: string }>();
+    .maybeSingle<{
+      id: string;
+      patient_id: string;
+      doctor_id: string;
+      appointment_date: string;
+      start_time: string;
+      end_time: string;
+    }>();
+  
+  if (fetchErr || !appt) {
+    return {
+      ok: false as const,
+      message: "Appointment not found.",
+      appointments: await readAppointments(),
+    };
+  }
+
   const { error } = await supabase
     .from("appointments")
     .update({ status: "Cancelled" })
@@ -498,6 +509,14 @@ export async function deletePersistedAppointment(appointmentId: string) {
       appointments: await readAppointments(),
     };
   }
+
+  // Recalculate queue numbers for remaining appointments in this slot
+  await recalculateQueueNumbersForSlot({
+    doctor_id: appt.doctor_id,
+    appointment_date: appt.appointment_date,
+    start_time: appt.start_time,
+    end_time: appt.end_time,
+  });
 
   if (appt) {
     await enqueueNotification({
@@ -512,94 +531,6 @@ export async function deletePersistedAppointment(appointmentId: string) {
     ok: true as const,
     message: "Appointment cancelled.",
     appointments: await readAppointments(),
-  };
-}
-
-export async function markAppointmentPaid(appointmentId: string) {
-  const supabase = getSupabaseAdmin();
-  const { data: appt, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("id", appointmentId)
-    .single<V2Appointment>();
-  if (error || !appt) {
-    return {
-      ok: false as const,
-      message: "Appointment not found.",
-      appointments: await readAppointments(),
-    };
-  }
-  if (appt.appointment_type !== "Online") {
-    return {
-      ok: false as const,
-      message: "Only online consultations require advance payment.",
-      appointments: await readAppointments(),
-    };
-  }
-  if (appt.status === "Confirmed" && appt.meeting_link) {
-    const appointments = await readAppointments();
-    return {
-      ok: true as const,
-      message: "Payment is already confirmed and the meeting link is available.",
-      appointment: appointments.find((a) => a.id === appointmentId) ?? null,
-      appointments,
-    };
-  }
-
-  const { data: doctor } = await supabase
-    .from("doctors")
-    .select("consultation_fee_online")
-    .eq("id", appt.doctor_id)
-    .maybeSingle<{ consultation_fee_online: number }>();
-  const amount = calculateConsultationCharge(
-    Number(doctor?.consultation_fee_online ?? 0),
-    appt.start_time,
-    appt.end_time,
-  );
-
-  const { error: payErr } = await supabase.from("payments").insert({
-    appointment_id: appt.id,
-    amount,
-    method: "Cash",
-    status: "Paid",
-    paid_at: new Date().toISOString(),
-    provider: "manual",
-    provider_ref: `manual_${randomUUID()}`,
-  });
-  if (payErr) throw payErr;
-
-  const meeting_link = buildMeetingLink(appt.id);
-  const { error: apptErr } = await supabase
-    .from("appointments")
-    .update({ status: "Confirmed", meeting_link })
-    .eq("id", appt.id);
-  if (apptErr) throw apptErr;
-
-  await enqueueNotification({
-    user_id: appt.patient_id,
-    template: "appointment_confirmed",
-    channels: ["email", "sms"],
-    payload: { appointment_id: appt.id, meeting_link },
-  });
-  await enqueueNotification({
-    user_id: appt.patient_id,
-    template: "appointment_payment_success",
-    channels: ["email", "sms"],
-    payload: { appointment_id: appt.id, meeting_link },
-  });
-  await enqueueNotification({
-    user_id: appt.patient_id,
-    template: "online_meeting_link",
-    channels: ["email", "sms"],
-    payload: { appointment_id: appt.id, meeting_link },
-  });
-
-  const appointments = await readAppointments();
-  return {
-    ok: true as const,
-    message: "Payment confirmed and meeting link generated.",
-    appointment: appointments.find((a) => a.id === appointmentId) ?? null,
-    appointments,
   };
 }
 

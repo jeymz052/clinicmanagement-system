@@ -44,6 +44,10 @@ function readRoleFromUser(user: User | null): UserRole {
   return readRoleFromUserMetadata(user) ?? DEFAULT_ROLE;
 }
 
+function isEmailVerified(user: User | null) {
+  return Boolean(user?.email_confirmed_at);
+}
+
 async function fetchProfileFromApi(accessToken: string): Promise<UserProfile | null> {
   const attempts = 3;
 
@@ -93,10 +97,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       const requestId = ++requestSequenceRef.current;
       if (!active) return;
       setSession(nextSession);
-      setUser(nextSession?.user ?? null);
+      setUser(isEmailVerified(nextSession?.user ?? null) ? nextSession?.user ?? null : null);
       setIsLoading(true);
 
-      if (nextSession?.user) {
+      if (nextSession?.user && isEmailVerified(nextSession.user)) {
         const optimisticRole = readRoleFromUserMetadata(nextSession.user);
         if (optimisticRole) {
           setRole(optimisticRole);
@@ -117,6 +121,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
           setRole(optimisticRole ?? readRoleFromUser(nextSession.user));
         }
       } else {
+        if (nextSession?.user && !isEmailVerified(nextSession.user)) {
+          await supabase.auth.signOut();
+        }
         setRole(DEFAULT_ROLE);
         setProfile(null);
       }

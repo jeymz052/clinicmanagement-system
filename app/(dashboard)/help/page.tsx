@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HelpPage() {
   const faqs = [
     {
@@ -31,23 +33,33 @@ export default function HelpPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Help & Support Center</h1>
-        <p className="mt-1 text-sm text-slate-500">Find answers to common questions and get support</p>
-      </div>
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_34%),linear-gradient(135deg,#f8fffb_0%,#ffffff_100%)] p-6 shadow-[0_24px_60px_rgba(16,185,129,0.10)]">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Help & Support</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Find answers faster and move back to work</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Use the common questions below or jump directly to the pages you need.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Shortcut href="/appointments" label="Appointments" />
+            <Shortcut href="/patients" label="Patients" />
+            <Shortcut href="/payments" label="Payments" />
+          </div>
+        </div>
+      </section>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm">
         <input
           type="text"
           placeholder="Search help topics..."
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="w-full rounded-[1rem] border border-emerald-100 px-4 py-3 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
         />
       </div>
 
       <div className="space-y-4">
         {faqs.map((faq, idx) => (
-          <details key={idx} className="group rounded-xl border border-slate-200 bg-white">
+          <details key={idx} className="group rounded-[1.5rem] border border-emerald-100 bg-white shadow-sm">
             <summary className="flex cursor-pointer items-center justify-between p-5 font-semibold text-slate-900">
               <span>{faq.question}</span>
               <span className="transition group-open:rotate-180">▼</span>
@@ -57,12 +69,23 @@ export default function HelpPage() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+      <div className="rounded-[1.75rem] border border-blue-200 bg-blue-50 p-6">
         <p className="font-semibold text-blue-900">Still need help?</p>
         <p className="mt-2 text-sm text-blue-800">
           Contact our support team at support@clinic.com or call +1 (555) 123-4567
         </p>
       </div>
     </div>
+  );
+}
+
+function Shortcut({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+    >
+      {label}
+    </Link>
   );
 }

@@ -3,6 +3,16 @@ function parseClockToMinutes(value: string) {
   return hours * 60 + minutes;
 }
 
+export const CONSULTATION_HOURLY_RATE = 350;
+export const CLINIC_CONSULTATION_HOURLY_RATE = CONSULTATION_HOURLY_RATE;
+export const ONLINE_CONSULTATION_HOURLY_RATE = CONSULTATION_HOURLY_RATE;
+
+export function normalizeConfiguredConsultationRate(value: number) {
+  return Number.isFinite(value) && value > 0
+    ? Math.max(value, CONSULTATION_HOURLY_RATE)
+    : CONSULTATION_HOURLY_RATE;
+}
+
 export function getAppointmentDurationMinutes(start: string, end: string) {
   return Math.max(0, parseClockToMinutes(end) - parseClockToMinutes(start));
 }
@@ -14,6 +24,10 @@ export function getAppointmentDurationHours(start: string, end: string) {
 export function calculateConsultationCharge(hourlyRate: number, start: string, end: string) {
   const hours = getAppointmentDurationHours(start, end);
   return Math.round(hourlyRate * hours * 100) / 100;
+}
+
+export function calculateOnlineConsultationCharge(start: string, end: string) {
+  return calculateConsultationCharge(ONLINE_CONSULTATION_HOURLY_RATE, start, end);
 }
 
 export function formatDurationLabel(start: string, end: string) {

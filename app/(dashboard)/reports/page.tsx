@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
 
@@ -67,29 +68,49 @@ export default function ReportsPage() {
   const peakMax = Math.max(1, ...(data?.peak_hours.map((h) => h.count) ?? [1]));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap animate-fade-in-down">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Reports & Analytics</h1>
-          <p className="mt-1 text-sm text-slate-500">Live metrics from the booking and payment system</p>
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(135deg,#f8fffb_0%,#effcf3_52%,#ffffff_100%)] p-6 shadow-[0_24px_60px_rgba(16,185,129,0.10)] animate-fade-in-down">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Reports & Analytics</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">Clinic revenue, patient volume, and peak-hour insights</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Review total patients, revenue, no-show rate, and booking patterns without jumping between modules.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <QuickLink href="/payments" label="Payments" />
+            <QuickLink href="/patients" label="Patients" />
+            <QuickLink href="/appointments/list" label="Appointments" />
+            <QuickLink href="/dashboard" label="Overview" />
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <label className="text-slate-500">From</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5"
-          />
-          <label className="text-slate-500">To</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5"
-          />
+      </section>
+
+      <section className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-1">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Date Range</p>
+            <p className="mt-1 text-sm text-slate-600">Filter the analytics window to match what you need to review.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="text-slate-500">From</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="rounded-full border border-emerald-100 bg-white px-3 py-2 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            />
+            <label className="text-slate-500">To</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="rounded-full border border-emerald-100 bg-white px-3 py-2 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -110,7 +131,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-5">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-5">
         <h2 className="text-lg font-bold text-slate-900">Peak Hours</h2>
         <p className="text-xs text-slate-500 mt-0.5">Booking count per hour (excluding cancelled)</p>
         {loading ? (
@@ -139,7 +160,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-8 hover-lift animate-fade-in-up stagger-6">
+      <div className="rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-6">
         <h2 className="text-lg font-bold text-slate-900">No-show Rate by Doctor</h2>
         <p className="text-xs text-slate-500 mt-0.5">Share of completed-or-missed appointments that were missed</p>
         {loading ? (
@@ -194,11 +215,22 @@ function StatCard({
     amber: "bg-amber-500",
   };
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 hover-lift">
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(15,23,42,0.08)]">
       <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full opacity-10 ${accent[tone]}`} />
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
     </div>
+  );
+}
+
+function QuickLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-center text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+    >
+      {label}
+    </Link>
   );
 }

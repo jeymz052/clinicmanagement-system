@@ -9,7 +9,11 @@ import type {
 } from "@/src/lib/db/types";
 import { getAppointment, getDoctor } from "@/src/lib/services/booking";
 import { enqueueNotification } from "@/src/lib/services/notification";
-import { calculateConsultationCharge, formatDurationLabel } from "@/src/lib/consultation-pricing";
+import {
+  calculateConsultationCharge,
+  formatDurationLabel,
+  normalizeConfiguredConsultationRate,
+} from "@/src/lib/consultation-pricing";
 
 export type BillingItemInput = {
   pricing_id?: string | null;
@@ -35,8 +39,8 @@ export async function issueBilling(input: {
   const appt = await getAppointment(input.appointment_id);
   if (appt.appointment_type !== "Clinic")
     throw new HttpError(400, "POS billing is clinic-only");
-  if (appt.status !== "Completed")
-    throw new HttpError(400, "Cannot bill before consultation is completed");
+  if (appt.status !== "InProgress" && appt.status !== "Completed")
+    throw new HttpError(400, "Generate the clinic bill after consultation starts.");
 
   const supabase = getSupabaseAdmin();
   const { data: existingBilling } = await supabase
@@ -89,12 +93,15 @@ export async function issueBilling(input: {
     };
   });
   const doctor = await getDoctor(appt.doctor_id);
+  const consultationHourlyRate = normalizeConfiguredConsultationRate(
+    Number(doctor.consultation_fee_clinic),
+  );
   const consultationLine = {
     pricing_id: null,
-    description: `Clinic consultation (${formatDurationLabel(appt.start_time, appt.end_time)} @ PHP ${Number(doctor.consultation_fee_clinic).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)`,
+    description: `Clinic consultation (${formatDurationLabel(appt.start_time, appt.end_time)} @ PHP ${consultationHourlyRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)`,
     quantity: 1,
     unit_price: calculateConsultationCharge(
-      Number(doctor.consultation_fee_clinic),
+      consultationHourlyRate,
       appt.start_time,
       appt.end_time,
     ),
@@ -148,8 +155,8 @@ export async function recordBillingPayment(
   providerRef: string | null,
   actor: Actor,
 ): Promise<{ billing: Billing; payment: Payment }> {
-  if (!isStaff(actor.profile.role))
-    throw new HttpError(403, "Only staff can record POS payments");
+  if (!isStaff(actor.profile.role) && actor.profile.role !== "doctor")
+    throw new HttpError(403, "Only clinic staff or doctors can record POS payments");
   if (!POS_ALLOWED_METHODS.has(method))
     throw new HttpError(400, "POS only accepts Cash, Transfer, or Card payments");
 
@@ -192,6 +199,14 @@ export async function recordBillingPayment(
     .select()
     .single<Billing>();
   if (updErr) throw updErr;
+
+  if (appt.status !== "Completed") {
+    const { error: apptUpdateError } = await supabase
+      .from("appointments")
+      .update({ status: "Completed" })
+      .eq("id", appt.id);
+    if (apptUpdateError) throw apptUpdateError;
+  }
 
   return { billing: updated, payment };
 }

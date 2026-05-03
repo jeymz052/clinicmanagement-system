@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorUnavailability } from "@/src/components/clinic/useClinicData";
@@ -13,11 +14,18 @@ import {
   SLOT_TEMPLATES_BY_DOCTOR,
 } from "@/src/lib/appointments";
 
-const DEFAULT_WEEK_START = "2026-04-13";
+function getCurrentWeekStart() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay();
+  const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+  const monday = new Date(today.setDate(diff));
+  return monday.toISOString().slice(0, 10);
+}
 
 export default function CalendarViewPage() {
   const [doctorId, setDoctorId] = useState(DOCTORS[0]?.id ?? "");
-  const [weekStart, setWeekStart] = useState(DEFAULT_WEEK_START);
+  const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const { appointments, isLoading, error } = useAppointments();
   const { data: blockedDates } = useDoctorUnavailability();
 
@@ -28,45 +36,22 @@ export default function CalendarViewPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)]">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Calendar</p>
-            <h1 className="mt-3 text-3xl font-black text-slate-900">Calendar View</h1>
+            <h1 className="mt-3 text-3xl font-black text-slate-900">Shared weekly availability at a glance</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Shared-slot weekly calendar for clinic and online availability.
+              Compare clinic and online slots, then jump straight to the right appointment page when you need it.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <select
-              value={doctorId}
-              onChange={(event) => setDoctorId(event.target.value)}
-              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-            >
-              {DOCTORS.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>
-                  {doctor.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setWeekStart(shiftDate(weekStart, -7))}
-              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50"
-            >
-              Previous Week
-            </button>
-            <button
-              type="button"
-              onClick={() => setWeekStart(shiftDate(weekStart, 7))}
-              className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50"
-            >
-              Next Week
-            </button>
+            <Shortcut href="/appointments" label="Appointments" />
+            <Shortcut href="/appointments/my" label="My Appointments" />
           </div>
         </div>
-      </div>
+      </section>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -75,17 +60,59 @@ export default function CalendarViewPage() {
       ) : null}
 
       <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in">
-        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{selectedDoctor.name}</h2>
             <p className="text-sm text-slate-500">{selectedDoctor.specialty}</p>
           </div>
-          <p className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+          <p className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 whitespace-nowrap">
             Week of {formatDisplayDate(weekStart)}
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="mb-6 flex flex-wrap items-center gap-3 border-t border-emerald-100 pt-4">
+          <span className="text-sm font-semibold text-slate-600">Filter by:</span>
+          <select
+            value={doctorId}
+            onChange={(event) => setDoctorId(event.target.value)}
+            className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 hover:border-emerald-300"
+          >
+            {DOCTORS.map((doctor) => (
+              <option key={doctor.id} value={doctor.id}>
+                {doctor.name}
+              </option>
+            ))}
+          </select>
+          
+          <div className="flex gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => setWeekStart(shiftDate(weekStart, -7))}
+              className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 active:bg-emerald-100"
+              title="Show previous week"
+            >
+              ← Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(getCurrentWeekStart())}
+              className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+              title="Return to current week"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(shiftDate(weekStart, 7))}
+              className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 active:bg-emerald-100"
+              title="Show next week"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-[1.5rem] border border-emerald-100">
           <table className="min-w-[900px] w-full text-sm">
             <thead>
               <tr>
@@ -197,4 +224,15 @@ function shiftDate(date: string, days: number) {
   const nextDate = new Date(`${date}T00:00:00`);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate.toISOString().slice(0, 10);
+}
+
+function Shortcut({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+    >
+      {label}
+    </Link>
+  );
 }

@@ -130,12 +130,16 @@ function buildAppointmentTypeData(appointments: AppointmentRecord[]) {
 }
 
 function buildPaymentStatusData(appointments: AppointmentRecord[]) {
-  const paid = appointments.filter((a) => a.status === "Paid" || a.status === "Completed").length;
-  const pending = appointments.filter((a) => a.status === "Pending Payment").length;
+  const paid = appointments.filter(
+    (a) =>
+      (a.type === "Online" && (a.status === "Confirmed" || a.status === "In Progress" || a.status === "Completed")) ||
+      (a.type === "Clinic" && a.status === "Completed"),
+  ).length;
+  const readyForPos = appointments.filter((a) => a.type === "Clinic" && a.status === "In Progress").length;
   const confirmedClinic = appointments.filter((a) => a.status === "Confirmed" && a.type === "Clinic").length;
   return [
     { name: "Paid", value: paid },
-    { name: "Pending", value: pending },
+    { name: "Ready For POS", value: readyForPos },
     { name: "Unbilled", value: confirmedClinic },
   ];
 }
@@ -358,7 +362,7 @@ export default function AdminDashboard() {
 
   const todayAppointments = appointments.filter((a) => a.date === todayIso);
   const onlineConsultsToday = todayAppointments.filter((a) => a.type === "Online").length;
-  const pendingPayments = appointments.filter((a) => a.status === "Pending Payment").length;
+  const readyForPos = appointments.filter((a) => a.type === "Clinic" && a.status === "In Progress").length;
   const totalPatients = patients.length;
   const activePatients = patients.filter((p) => p.status === "Active").length;
   const inactivePatients = totalPatients - activePatients;
@@ -395,7 +399,8 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 p-5 shadow-md text-white transition-all duration-300 hover:shadow-xl hover:scale-[1.03] animate-fade-in-up stagger-1">
+        <Link href="/patients" className="block no-underline">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 p-5 shadow-md text-white transition-all duration-300 hover:shadow-xl hover:scale-[1.03] animate-fade-in-up stagger-1">
           <div className="absolute -top-8 -right-8 h-24 w-24 rounded-full bg-white/10 animate-float-slow" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Total Patients</p>
@@ -405,9 +410,11 @@ export default function AdminDashboard() {
           <p className="text-xs text-white/60 mt-1">Registered in the system</p>
           <MiniSparkline data={sparkPatients.length ? sparkPatients : [0]} color="#ffffff" />
           <ProgressBar value={activePatients} max={Math.max(1, totalPatients)} color="#ffffff" />
-        </div>
+          </div>
+        </Link>
 
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-300 animate-fade-in-up stagger-2">
+        <Link href="/appointments" className="block no-underline">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-teal-300 animate-fade-in-up stagger-2">
           <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-teal-500 opacity-10" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Appointments</p>
@@ -417,9 +424,11 @@ export default function AdminDashboard() {
           <p className="text-xs text-slate-400 mt-1">Scheduled for today</p>
           <MiniSparkline data={sparkAppts.length ? sparkAppts : [0]} color="#14b8a6" />
           <ProgressBar value={todayAppointments.length} max={25} color="#14b8a6" />
-        </div>
+          </div>
+        </Link>
 
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-sky-300 animate-fade-in-up stagger-3">
+        <Link href="/appointments?filter=online" className="block no-underline">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-sky-300 animate-fade-in-up stagger-3">
           <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-sky-500 opacity-10" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Online Consults</p>
@@ -432,19 +441,22 @@ export default function AdminDashboard() {
             color="#38bdf8"
           />
           <ProgressBar value={onlineConsultsToday} max={15} color="#38bdf8" />
-        </div>
+          </div>
+        </Link>
 
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-amber-300 animate-fade-in-up stagger-4">
+        <Link href="/payments/pos" className="block no-underline">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.03] hover:border-amber-300 animate-fade-in-up stagger-4">
           <div className="absolute -top-4 -right-4 h-16 w-16 rounded-full bg-amber-500 opacity-10" />
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Legacy Unpaid Online</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ready For POS</p>
             <span className="text-xs font-semibold text-amber-600">all time</span>
           </div>
-          <p className="text-3xl font-bold text-slate-900 mt-2">{pendingPayments}</p>
-          <p className="text-xs text-slate-400 mt-1">Legacy records awaiting payment</p>
-          <MiniSparkline data={[pendingPayments]} color="#fbbf24" />
-          <ProgressBar value={pendingPayments} max={Math.max(10, appointments.length)} color="#fbbf24" />
-        </div>
+          <p className="text-3xl font-bold text-slate-900 mt-2">{readyForPos}</p>
+          <p className="text-xs text-slate-400 mt-1">Clinic consultations ready for billing</p>
+          <MiniSparkline data={[readyForPos]} color="#fbbf24" />
+          <ProgressBar value={readyForPos} max={Math.max(10, appointments.length)} color="#fbbf24" />
+          </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

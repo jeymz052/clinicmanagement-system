@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { FaCalendarDays, FaChevronRight, FaFileLines, FaHospital, FaVideo } from "react-icons/fa6";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
+import { ActionCard, DashboardHero, MetricCard, SectionCard, StatusPill } from "@/src/components/dashboard/dashboard-ui";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { AppointmentRecord } from "@/src/lib/appointments";
 
@@ -35,227 +37,152 @@ export default function PatientDashboard() {
     [appointments, today],
   );
   const pastCompleted = useMemo(() => appointments.filter((a) => a.status === "Completed").length, [appointments]);
-  const legacyPendingPayments = useMemo(
-    () => appointments.filter((a) => a.status === "Pending Payment"),
-    [appointments],
-  );
+  const onlineConsultations = useMemo(() => appointments.filter((a) => a.type === "Online").length, [appointments]);
+  const clinicVisits = useMemo(() => appointments.filter((a) => a.type === "Clinic").length, [appointments]);
 
   const next = upcoming[0] ?? null;
+  const heroSummary = next ? `Next: ${formatDate(next.date)} at ${next.start}` : `You're all set!`;
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-6 shadow-[0_28px_70px_rgba(16,185,129,0.12)] animate-fade-in-down">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Patient Dashboard</p>
-            <h1 className="mt-3 text-3xl font-black text-slate-900">Welcome, {name}</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-              Keep track of your confirmed bookings, meeting links, and next consultation from one calm workspace.
-            </p>
-          </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            {upcoming.length} upcoming appointment{upcoming.length === 1 ? "" : "s"}
-          </div>
-        </div>
-      </div>
+      <DashboardHero
+        eyebrow="Patient Dashboard"
+        title={`Welcome, ${name}`}
+        description="See upcoming visits, open your meeting link, and reach your records from one calm dashboard."
+        summary={heroSummary}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="animate-fade-in-up stagger-1">
-          <StatCard label="Upcoming" value={upcoming.length} tone="teal" />
-        </div>
-        <div className="animate-fade-in-up stagger-2">
-          <StatCard label="Completed" value={pastCompleted} tone="emerald" />
-        </div>
-        <div className="animate-fade-in-up stagger-3">
-          <StatCard label="Legacy Unpaid" value={legacyPendingPayments.length} tone="amber" />
-        </div>
-      </div>
-
-      <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/60 px-4 py-4 text-sm text-slate-700 animate-fade-in-up stagger-4 shadow-sm">
-        Online consultations are paid first during booking. They appear in your appointments only after payment is confirmed.
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard href="/appointments/my" label="Upcoming" value={upcoming.length} helper="Appointments waiting for you" tone="emerald" icon={<FaCalendarDays className="text-2xl" />} />
+        <MetricCard href="/appointments/my?filter=clinic" label="Clinic Visits" value={clinicVisits} helper="In-person appointments" tone="teal" icon={<FaHospital className="text-2xl" />} />
+        <MetricCard href="/appointments/my?filter=online" label="Online Consults" value={onlineConsultations} helper="Video consultations" tone="sky" icon={<FaVideo className="text-2xl" />} />
+        <MetricCard href="/appointments/my?tab=completed" label="Completed" value={pastCompleted} helper="Past visits completed" tone="emerald" icon={<FaChevronRight className="text-2xl" />} />
       </div>
 
       {next ? (
-        <div className="rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.16),_transparent_28%),linear-gradient(135deg,_#f0fdf4,_#ffffff_52%,_#ecfeff)] p-6 shadow-[0_20px_45px_rgba(16,185,129,0.12)] animate-pop-in stagger-4 transition hover:-translate-y-0.5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Next Appointment</p>
-              <p className="mt-2 text-2xl font-black text-slate-900">
-                {formatDate(next.date)} · {next.start}
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                {next.type === "Online" ? "Online consultation" : "Clinic visit"} · Queue #{next.queueNumber}
-              </p>
-              {next.reason ? <p className="mt-2 text-sm italic text-slate-500">&quot;{next.reason}&quot;</p> : null}
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  next.status === "Paid" || next.status === "Confirmed"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : next.status === "Pending Payment"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-slate-100 text-slate-700"
-                }`}
-              >
-                {next.status}
-              </span>
-              {next.type === "Online" && next.meetingLink ? (
-                <a
-                  href={next.meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5"
-                >
-                  Join Consultation
-                </a>
-              ) : null}
-              {next.status === "Pending Payment" ? (
-                <Link
-                  href="/payments"
-                  className="rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-700"
-                >
-                  Resume Legacy Payment
-                </Link>
-              ) : null}
+        <section className="relative overflow-hidden rounded-[2.5rem] border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-cyan-50/20 p-8 shadow-[0_28px_54px_rgba(16,185,129,0.16)] animate-pop-in transition hover:-translate-y-1">
+          <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-gradient-to-br from-emerald-300/20 to-teal-300/10 blur-3xl" />
+          <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-gradient-to-r from-teal-300/20 to-cyan-300/10 blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex-1 max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-2 mb-4">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                  <span className="text-xs font-bold text-emerald-700">YOUR NEXT APPOINTMENT</span>
+                </div>
+                <h2 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900 mt-3">
+                  {formatDate(next.date)} <span className="text-emerald-600">·</span> {next.start}
+                </h2>
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
+                      <span className="text-lg">#{next.queueNumber}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Queue Position</p>
+                      <p className="text-xs text-slate-500">You are next in queue</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100">
+                      {next.type === "Online" ? <FaVideo className="text-sm text-teal-700" /> : <FaHospital className="text-sm text-teal-700" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{next.type === "Online" ? "Online Consultation" : "Clinic Visit"}</p>
+                      <p className="text-xs text-slate-500">{next.reason || "General consultation"}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 lg:flex-col lg:items-end">
+                <StatusPill tone={next.status === "Confirmed" ? "emerald" : next.status === "In Progress" ? "amber" : "slate"}>
+                  {next.status}
+                </StatusPill>
+                {next.type === "Online" && next.meetingLink ? (
+                  <a
+                    href={next.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-[0_16px_32px_rgba(16,185,129,0.3)] transition hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(16,185,129,0.4)]"
+                  >
+                    <FaVideo />
+                    Join consultation
+                  </a>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {legacyPendingPayments.length > 0 ? (
-        <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 animate-fade-in-up stagger-5 flex items-start gap-3 shadow-sm">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 animate-soft-pulse">
-            <svg className="h-4 w-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <p className="text-sm font-medium text-amber-900">
-            You have {legacyPendingPayments.length} legacy online appointment{legacyPendingPayments.length === 1 ? "" : "s"} awaiting payment.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-900">Upcoming Appointments</h2>
-          <Link href="/appointments/my" className="text-xs font-semibold text-emerald-700 transition-colors hover:text-emerald-800">
-            Book another
-          </Link>
-        </div>
+      <SectionCard
+        title="Your Upcoming Schedule"
+        description="Don't miss your appointments. Check dates, times, and join online consultations directly."
+        actionLabel="View all appointments"
+        actionHref="/appointments/my"
+      >
         {isLoading ? (
-          <div className="h-24 rounded-lg shimmer" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 rounded-2xl shimmer" />
+            ))}
+          </div>
         ) : upcoming.length === 0 ? (
-          <div className="rounded-[1.5rem] border border-dashed border-emerald-200 px-6 py-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
-              <svg className="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+          <div className="rounded-[1.75rem] border-2 border-dashed border-emerald-200 px-8 py-12 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <FaCalendarDays className="text-2xl text-emerald-700" />
             </div>
-            <p className="text-sm text-slate-500">No upcoming appointments.</p>
+            <p className="text-base font-semibold text-slate-900">No upcoming appointments</p>
+            <p className="mt-2 text-sm text-slate-500">You're all caught up! Book your next appointment when you need one.</p>
             <Link
               href="/appointments"
-              className="mt-3 inline-block rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(16,185,129,0.25)] transition hover:-translate-y-1"
             >
-              Book Appointment
+              <FaCalendarDays />
+              Book appointment
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-emerald-50">
-            {upcoming.slice(0, 5).map((appt, i) => (
-              <div
+          <div className="space-y-3">
+            {upcoming.slice(0, 6).map((appt, i) => (
+              <Link
                 key={appt.id}
-                className={`flex items-center justify-between px-2 py-3 -mx-2 rounded-[1rem] transition-colors hover:bg-emerald-50/40 animate-slide-in-left stagger-${Math.min(i + 1, 5)}`}
+                href={`/appointments/my`}
+                className={`group flex items-center justify-between gap-4 rounded-[1.25rem] border-2 border-transparent px-5 py-4 transition-all hover:border-emerald-200 hover:bg-emerald-50/60 hover:shadow-[0_8px_20px_rgba(16,185,129,0.10)] animate-slide-in-left stagger-${Math.min(i + 1, 5)}`}
               >
-                <div className="min-w-0 flex items-center gap-3">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
-                      appt.type === "Online" ? "bg-teal-100 text-teal-700" : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    <span className="text-xs font-bold">#{appt.queueNumber}</span>
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${appt.type === "Online" ? "bg-gradient-to-br from-sky-500 to-sky-600" : "bg-gradient-to-br from-emerald-500 to-teal-600"}`}>
+                    {appt.type === "Online" ? <FaVideo className="text-sm" /> : <FaHospital className="text-sm" />}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {formatDate(appt.date)} · {appt.start}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {appt.type}
-                      {appt.reason ? ` · ${appt.reason}` : ""}
+                    <p className="text-sm font-bold text-slate-900">{formatDate(appt.date)} · {appt.start}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {appt.type === "Online" ? "Online consultation" : "Clinic visit"}
+                      {appt.reason ? ` • ${appt.reason}` : ""}
                     </p>
                   </div>
                 </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                    appt.status === "Paid" || appt.status === "Confirmed"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : appt.status === "Pending Payment"
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-slate-100 text-slate-700"
-                  }`}
-                >
-                  {appt.status}
-                </span>
-              </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <StatusPill tone={appt.status === "Confirmed" ? "emerald" : appt.status === "In Progress" ? "amber" : "slate"} variant="outline">
+                    {appt.status}
+                  </StatusPill>
+                  <span className="text-slate-300 group-hover:text-slate-400 transition-colors">→</span>
+                </div>
+              </Link>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
 
-      <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in-up stagger-7">
-        <h2 className="mb-4 text-base font-bold text-slate-900">Quick Actions</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <QuickAction href="/appointments" label="Book Appointment" color="teal" />
-          <QuickAction href="/appointments/my" label="My Appointments" color="sky" />
-          <QuickAction href="/payments" label="Payments" color="amber" />
+      <SectionCard title="Quick Links" description="Fast access to the tools you need most.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ActionCard href="/appointments" title="Book New Appointment" description="Schedule your next visit at a time that works for you." tone="emerald" icon={<FaCalendarDays className="text-lg" />} />
+          <ActionCard href="/appointments/my" title="View Schedule" description="See your upcoming and past appointments." tone="teal" icon={<FaCalendarDays className="text-lg" />} />
+          <ActionCard href="/payments" title="View Payments" description="See your billing history and receipts." tone="sky" icon={<FaChevronRight className="text-lg" />} />
+          <ActionCard href="/appointments/my?filter=online" title="Join Online Consultation" description="Open your active online consultation link." tone="violet" icon={<FaVideo className="text-lg" />} />
+          <ActionCard href="/consultations/history" title="Consultation History" description="Review past visit notes and follow-ups." tone="cyan" icon={<FaFileLines className="text-lg" />} />
         </div>
-      </div>
+      </SectionCard>
     </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "teal" | "emerald" | "amber";
-}) {
-  const toneMap = {
-    teal: "border-teal-200 bg-teal-50/50 hover:border-teal-300",
-    emerald: "border-emerald-200 bg-emerald-50/50 hover:border-emerald-300",
-    amber: "border-amber-200 bg-amber-50/50 hover:border-amber-300",
-  };
-  const accentMap = {
-    teal: "bg-teal-500",
-    emerald: "bg-emerald-500",
-    amber: "bg-amber-500",
-  };
-  return (
-    <div className={`relative overflow-hidden rounded-[1.75rem] border bg-white p-5 shadow-[0_16px_34px_rgba(16,185,129,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_40px_rgba(16,185,129,0.12)] ${toneMap[tone]}`}>
-      <div className={`absolute -top-4 -right-4 h-20 w-20 rounded-full opacity-10 ${accentMap[tone]}`} />
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-black text-slate-900">{value}</p>
-    </div>
-  );
-}
-
-function QuickAction({ href, label, color }: { href: string; label: string; color: "teal" | "sky" | "amber" }) {
-  const colorMap = {
-    teal: "border-emerald-200 hover:bg-emerald-50 hover:border-emerald-400 text-emerald-700",
-    sky: "border-teal-200 hover:bg-teal-50 hover:border-teal-400 text-teal-700",
-    amber: "border-amber-200 hover:bg-amber-50 hover:border-amber-400 text-amber-700",
-  };
-  return (
-    <Link
-      href={href}
-      className={`group flex items-center justify-center gap-1.5 rounded-[1.2rem] border bg-white px-4 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_16px_30px_rgba(16,185,129,0.10)] ${colorMap[color]}`}
-    >
-      <span>{label}</span>
-      <span className="opacity-0 -translate-x-1 transition-all group-hover:translate-x-0 group-hover:opacity-100">→</span>
-    </Link>
   );
 }

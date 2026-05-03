@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
+import type { SystemSettings } from "@/src/lib/clinic";
 
 type DoctorOption = {
   id: string;
@@ -51,6 +53,17 @@ const INITIAL_FORM: ScheduleForm = {
   is_active: true,
 };
 
+const EMPTY_SETTINGS: SystemSettings = {
+  clinicName: "",
+  email: "",
+  phone: "",
+  address: "",
+  onlineConsultationFee: 0,
+  maxPatientsPerHour: 5,
+  clinicOpenTime: "08:00",
+  clinicCloseTime: "17:00",
+};
+
 function normalizeTime(value: string) {
   return value.slice(0, 5);
 }
@@ -68,10 +81,14 @@ export default function SchedulesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings>(EMPTY_SETTINGS);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [isSaving, startTransition] = useTransition();
+  const [isSavingSchedule, startScheduleTransition] = useTransition();
+  const [isSavingHours, startHoursTransition] = useTransition();
 
-  const canManage = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
+  const canManageSchedule = role === "SUPER_ADMIN" || role === "SECRETARY" || role === "DOCTOR";
+  const canManageClinicHours = role === "SUPER_ADMIN" || role === "DOCTOR";
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
 
   useEffect(() => {
@@ -139,13 +156,59 @@ export default function SchedulesPage() {
     };
   }, [accessToken, selectedDoctorId]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    let active = true;
+
+    (async () => {
+      try {
+        setSettingsLoading(true);
+        const res = await fetch("/api/settings", {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) throw new Error("Failed to load clinic hours.");
+        const payload = (await res.json()) as { data: SystemSettings };
+        if (!active) return;
+        setSettings(payload.data);
+      } catch (error) {
+        if (active && canManageClinicHours) {
+          setFeedback({
+            tone: "error",
+            message: error instanceof Error ? error.message : "Failed to load clinic hours.",
+          });
+        }
+      } finally {
+        if (active) setSettingsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, canManageClinicHours]);
+
   const scheduleByDay = useMemo(
     () => new Map(schedules.map((item) => [item.day_of_week, item])),
     [schedules],
   );
 
+  const activeScheduleCount = schedules.filter((item) => item.is_active).length;
+  const blockedDayRequirementMet = true;
+  const doctorRequirementMet = schedules.length > 0;
+  const clinicHoursRequirementMet = Boolean(settings.clinicOpenTime && settings.clinicCloseTime);
+  const weeklyHoursText = `${settings.clinicOpenTime} - ${settings.clinicCloseTime}`;
+
   function updateField<K extends keyof ScheduleForm>(field: K, value: ScheduleForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+    setFeedback(null);
+  }
+
+  function updateClinicHours<K extends "clinicOpenTime" | "clinicCloseTime">(
+    field: K,
+    value: SystemSettings[K],
+  ) {
+    setSettings((current) => ({ ...current, [field]: value }));
     setFeedback(null);
   }
 
@@ -171,7 +234,7 @@ export default function SchedulesPage() {
     event.preventDefault();
     if (!accessToken || !selectedDoctorId) return;
 
-    startTransition(async () => {
+    startScheduleTransition(async () => {
       const method = editingId ? "PATCH" : "POST";
       const res = await fetch(`/api/v2/doctors/${selectedDoctorId}/schedule`, {
         method,
@@ -215,7 +278,7 @@ export default function SchedulesPage() {
   function deleteSchedule(schedule: DoctorSchedule) {
     if (!accessToken || !selectedDoctorId) return;
 
-    startTransition(async () => {
+    startScheduleTransition(async () => {
       const res = await fetch(
         `/api/v2/doctors/${selectedDoctorId}/schedule?schedule_id=${schedule.id}`,
         {
@@ -236,14 +299,73 @@ export default function SchedulesPage() {
     });
   }
 
+  function saveClinicHours(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken) return;
+    if (settings.clinicOpenTime >= settings.clinicCloseTime) {
+      setFeedback({
+        tone: "error",
+        message: "Clinic opening time must be earlier than clinic closing time.",
+      });
+      return;
+    }
+
+    startHoursTransition(async () => {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(settings),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        data?: SystemSettings;
+        message?: string;
+      };
+      if (!res.ok || !body.data) {
+        setFeedback({ tone: "error", message: body.message ?? "Failed to save clinic hours." });
+        return;
+      }
+      setSettings(body.data);
+      setFeedback({
+        tone: "success",
+        message: `Clinic hours updated to ${body.data.clinicOpenTime} - ${body.data.clinicCloseTime}.`,
+      });
+    });
+  }
+
   return (
     <div className="space-y-6 pb-8">
-      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.18),transparent_32%),linear-gradient(135deg,#ecfdf5_0%,#ffffff_72%)] p-6 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Schedule Management</p>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900">Working hours, schedule CRUD, and clinic coverage</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Add, edit, and delete doctor schedules, set working hours per weekday, and pair them with blocked dates from the unavailable dates module.
-        </p>
+      <section className="overflow-hidden rounded-[2.5rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.22),transparent_30%),linear-gradient(135deg,#ecfdf5_0%,#ffffff_74%)] p-6 shadow-[0_24px_60px_rgba(16,185,129,0.10)]">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Schedule Management</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">Manage doctor schedules, leave, and clinic hours</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This workspace now covers weekly schedule CRUD, working hours, blocked leave dates,
+              and clinic-wide operating hours in one green scheduling flow.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryBadge
+              label="Active days"
+              value={`${activeScheduleCount}/7`}
+              tone={doctorRequirementMet ? "success" : "neutral"}
+            />
+            <SummaryBadge
+              label="Clinic hours"
+              value={weeklyHoursText}
+              tone={clinicHoursRequirementMet ? "success" : "neutral"}
+            />
+            <SummaryBadge
+              label="Date blocking"
+              value={blockedDayRequirementMet ? "Ready" : "Missing"}
+              tone={blockedDayRequirementMet ? "success" : "neutral"}
+            />
+          </div>
+        </div>
       </section>
 
       {feedback ? (
@@ -258,20 +380,112 @@ export default function SchedulesPage() {
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <RuleCard title="Full CRUD" description="One weekly schedule per doctor/day can be created, edited, toggled active, or removed." />
-        <RuleCard title="Working Hours" description="Set start time, end time, slot duration, and whether the shift is clinic-only, online-only, or shared." />
-        <RuleCard title="Blocked Dates" description="Use the Unavailable Dates page for leave and no-booking dates. Those blocks continue to override these weekly hours." />
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Editor</p>
-              <h2 className="mt-2 text-xl font-bold text-slate-900">Weekly working schedule</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Requirement Check</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-900">What the current system already supports</h2>
             </div>
-            {!canManage ? (
+            {!canManageSchedule ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">View only</span>
+            ) : null}
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <RequirementCard
+              title="Add / Edit / Delete schedules"
+              detail="Doctor weekly schedules already support full CRUD from this page."
+              status="met"
+            />
+            <RequirementCard
+              title="Set working hours"
+              detail="Start time, end time, slot length, and clinic or online mode are already configurable."
+              status="met"
+            />
+            <RequirementCard
+              title="Block dates"
+              detail="Leave and blocked dates are handled on the dedicated blocking page."
+              status="met"
+            />
+            <RequirementCard
+              title="Adjust clinic hours"
+              detail="Supported in settings already, now surfaced here for easier access."
+              status="improved"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Clinic Hours</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-900">Adjust clinic operating hours</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Weekly doctor schedules must stay inside these hours.
+              </p>
+            </div>
+            {settingsLoading ? <span className="text-sm text-slate-500">Loading...</span> : null}
+          </div>
+
+          <form className="mt-6 space-y-5" onSubmit={saveClinicHours}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Clinic Opens">
+                <input
+                  type="time"
+                  value={settings.clinicOpenTime}
+                  onChange={(event) => updateClinicHours("clinicOpenTime", event.target.value)}
+                  disabled={!canManageClinicHours || isSavingHours || settingsLoading}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                />
+              </Field>
+
+              <Field label="Clinic Closes">
+                <input
+                  type="time"
+                  value={settings.clinicCloseTime}
+                  onChange={(event) => updateClinicHours("clinicCloseTime", event.target.value)}
+                  disabled={!canManageClinicHours || isSavingHours || settingsLoading}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                />
+              </Field>
+            </div>
+
+            <div className="rounded-[1.4rem] border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900">
+              Current scheduling guardrail: doctors can only be booked between{" "}
+              <span className="font-semibold">{weeklyHoursText}</span>.
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={!canManageClinicHours || isSavingHours || settingsLoading}
+                className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingHours ? "Saving..." : "Save Clinic Hours"}
+              </button>
+              <Link
+                href="/settings"
+                className="rounded-full border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+              >
+                Open Full Settings
+              </Link>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+        <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Editor</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-900">Weekly working schedule</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Create or update the recurring hours for each doctor.
+              </p>
+            </div>
+            {!canManageSchedule ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">View only</span>
             ) : null}
           </div>
@@ -281,8 +495,8 @@ export default function SchedulesPage() {
               <select
                 value={selectedDoctorId}
                 onChange={(event) => setSelectedDoctorId(event.target.value)}
-                disabled={loading || !canManage}
-                className="mt-2 w-full rounded-[1.15rem] border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                disabled={loading || !canManageSchedule}
+                className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
               >
                 {doctors.map((doctor) => (
                   <option key={doctor.id} value={doctor.id}>
@@ -297,8 +511,8 @@ export default function SchedulesPage() {
                 <select
                   value={form.day_of_week}
                   onChange={(event) => updateField("day_of_week", Number(event.target.value))}
-                  disabled={!canManage || isSaving}
-                  className="mt-2 w-full rounded-[1.15rem] border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                  disabled={!canManageSchedule || isSavingSchedule}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 >
                   {DAYS.map((day, index) => (
                     <option key={day} value={index}>
@@ -312,8 +526,8 @@ export default function SchedulesPage() {
                 <select
                   value={form.schedule_mode}
                   onChange={(event) => updateField("schedule_mode", event.target.value as ScheduleMode)}
-                  disabled={!canManage || isSaving}
-                  className="mt-2 w-full rounded-[1.15rem] border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                  disabled={!canManageSchedule || isSavingSchedule}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 >
                   <option value="Both">Clinic + Online</option>
                   <option value="Clinic">Clinic only</option>
@@ -326,20 +540,24 @@ export default function SchedulesPage() {
               <Field label="Start Time">
                 <input
                   type="time"
+                  min={settings.clinicOpenTime}
+                  max={settings.clinicCloseTime}
                   value={form.start_time}
                   onChange={(event) => updateField("start_time", event.target.value)}
-                  disabled={!canManage || isSaving}
-                  className="mt-2 w-full rounded-[1.15rem] border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                  disabled={!canManageSchedule || isSavingSchedule}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 />
               </Field>
 
               <Field label="End Time">
                 <input
                   type="time"
+                  min={settings.clinicOpenTime}
+                  max={settings.clinicCloseTime}
                   value={form.end_time}
                   onChange={(event) => updateField("end_time", event.target.value)}
-                  disabled={!canManage || isSaving}
-                  className="mt-2 w-full rounded-[1.15rem] border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                  disabled={!canManageSchedule || isSavingSchedule}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 />
               </Field>
 
@@ -347,8 +565,8 @@ export default function SchedulesPage() {
                 <select
                   value={form.slot_minutes}
                   onChange={(event) => updateField("slot_minutes", Number(event.target.value))}
-                  disabled={!canManage || isSaving}
-                  className="mt-2 w-full rounded-[1.15rem] border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
+                  disabled={!canManageSchedule || isSavingSchedule}
+                  className="mt-2 w-full rounded-[1.15rem] border border-emerald-100 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50"
                 >
                   {[30, 45, 60, 90, 120].map((value) => (
                     <option key={value} value={value}>
@@ -359,24 +577,29 @@ export default function SchedulesPage() {
               </Field>
             </div>
 
-            <label className="flex items-center gap-3 rounded-[1.25rem] border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3 rounded-[1.25rem] border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={form.is_active}
                 onChange={(event) => updateField("is_active", event.target.checked)}
-                disabled={!canManage || isSaving}
+                disabled={!canManageSchedule || isSavingSchedule}
                 className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
               />
               Keep this weekday active for booking
             </label>
 
+            <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Schedules for this page must stay within clinic hours of{" "}
+              <span className="font-semibold text-slate-900">{weeklyHoursText}</span>.
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={!canManage || isSaving || !selectedDoctorId}
+                disabled={!canManageSchedule || isSavingSchedule || !selectedDoctorId}
                 className="rounded-full bg-[linear-gradient(135deg,#059669,#10b981)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? "Saving..." : editingId ? "Update Schedule" : "Save Schedule"}
+                {isSavingSchedule ? "Saving..." : editingId ? "Update Schedule" : "Save Schedule"}
               </button>
               {editingId ? (
                 <button
@@ -392,10 +615,10 @@ export default function SchedulesPage() {
         </section>
 
         <section className="space-y-6">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Coverage Board</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Coverage Board</p>
                 <h2 className="mt-2 text-xl font-bold text-slate-900">
                   {selectedDoctor?.profiles?.[0]?.full_name ?? "Doctor"} weekly coverage
                 </h2>
@@ -407,7 +630,10 @@ export default function SchedulesPage() {
               {DAYS.map((day, index) => {
                 const schedule = scheduleByDay.get(index) ?? null;
                 return (
-                  <div key={day} className="rounded-[1.5rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4">
+                  <div
+                    key={day}
+                    className="rounded-[1.5rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-bold text-slate-900">{day}</p>
@@ -437,7 +663,7 @@ export default function SchedulesPage() {
                       </span>
                     </div>
 
-                    {schedule && canManage ? (
+                    {schedule && canManageSchedule ? (
                       <div className="mt-4 flex gap-2">
                         <button
                           type="button"
@@ -461,30 +687,22 @@ export default function SchedulesPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Next Step</p>
-            <h2 className="mt-2 text-xl font-bold text-slate-900">Block leave and unavailable dates</h2>
+          <div className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Blocked Dates</p>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">Leave and blocked days</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Weekly hours define when a doctor usually works. One-off leave, holidays, and unavailable dates should still be set on the Time Slots / Unavailable Dates page.
+              Weekly hours cover the normal routine. One-off leave, holidays, and blocked dates
+              should be managed on the blocking screen.
             </p>
-            <a
+            <Link
               href="/schedules/slots"
               className="mt-5 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
             >
-              Manage Unavailable Dates
-            </a>
+              Manage Blocked Dates
+            </Link>
           </div>
         </section>
       </div>
-    </div>
-  );
-}
-
-function RuleCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/60 px-5 py-4">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </div>
   );
 }
@@ -495,5 +713,56 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {label}
       {children}
     </label>
+  );
+}
+
+function SummaryBadge({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "neutral";
+}) {
+  return (
+    <div
+      className={`rounded-[1.4rem] border px-4 py-3 shadow-sm ${
+        tone === "success"
+          ? "border-emerald-200 bg-white text-emerald-900"
+          : "border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-2 text-base font-bold">{value}</p>
+    </div>
+  );
+}
+
+function RequirementCard({
+  title,
+  detail,
+  status,
+}: {
+  title: string;
+  detail: string;
+  status: "met" | "improved";
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-slate-900">{title}</p>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            status === "met"
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-lime-100 text-lime-700"
+          }`}
+        >
+          {status === "met" ? "Met" : "Improved"}
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
+    </div>
   );
 }

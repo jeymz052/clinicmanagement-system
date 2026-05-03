@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRole } from "@/src/components/layout/RoleProvider";
+import {
+  CLINIC_CONSULTATION_HOURLY_RATE,
+  ONLINE_CONSULTATION_HOURLY_RATE,
+  normalizeConfiguredConsultationRate,
+} from "@/src/lib/consultation-pricing";
 
 export type DoctorFees = {
   clinic: number;
@@ -17,7 +22,10 @@ export function useDoctorFees(slug = "chiara-punzalan"): {
   isLoading: boolean;
 } {
   const { accessToken, isLoading: authLoading } = useRole();
-  const [fees, setFees] = useState<DoctorFees>({ clinic: 0, online: 0 });
+  const [fees, setFees] = useState<DoctorFees>({
+    clinic: CLINIC_CONSULTATION_HOURLY_RATE,
+    online: ONLINE_CONSULTATION_HOURLY_RATE,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,8 +51,8 @@ export function useDoctorFees(slug = "chiara-punzalan"): {
           payload.doctors[0];
         if (match && active) {
           setFees({
-            clinic: Number(match.consultation_fee_clinic ?? 0),
-            online: Number(match.consultation_fee_online ?? 0),
+            clinic: normalizeConfiguredConsultationRate(Number(match.consultation_fee_clinic ?? 0)),
+            online: normalizeConfiguredConsultationRate(Number(match.consultation_fee_online ?? 0)),
           });
         }
       } finally {

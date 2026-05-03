@@ -95,10 +95,9 @@ export async function findOrCreatePatientByEmail(
 
 function deriveLegacyStatus(v2: V2Appointment): AppointmentStatus {
   if (v2.appointment_type === "Online") {
-    if (v2.status === "PendingPayment") return "Pending Payment";
     if (v2.status === "Completed") return "Completed";
     if (v2.status === "InProgress") return "In Progress";
-    return "Paid";
+    return "Confirmed";
   }
   if (v2.status === "Completed") return "Completed";
   if (v2.status === "InProgress") return "In Progress";

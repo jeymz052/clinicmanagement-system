@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { FaBell, FaEnvelope, FaIdBadge, FaPhone, FaRegUser, FaShieldHeart } from "react-icons/fa6";
 import { useRole } from "@/src/components/layout/RoleProvider";
@@ -35,8 +36,8 @@ export default function ProfilePage() {
   const initials = getInitials(fullName);
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(13,148,136,0.12),transparent_30%),linear-gradient(135deg,#0f172a_0%,#111827_45%,#134e4a_100%)] p-6 text-white shadow-sm sm:p-8">
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,rgba(13,148,136,0.12),transparent_30%),linear-gradient(135deg,#0f172a_0%,#111827_45%,#134e4a_100%)] p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.10)] sm:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-white/70 bg-white/10 text-2xl font-bold backdrop-blur">
@@ -53,6 +54,10 @@ export default function ProfilePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-100">Status</p>
             <p className="mt-2 text-lg font-semibold">{profile?.is_active ? "Active account" : "Inactive account"}</p>
             <p className="mt-1 text-sm text-white/75">Your account menu now lives in the upper-right corner of the dashboard.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Shortcut href="/help" label="Help Center" />
+              <Shortcut href="/settings" label="Settings" />
+            </div>
           </div>
         </div>
       </section>
@@ -112,6 +117,17 @@ export default function ProfilePage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function Shortcut({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+    >
+      {label}
+    </Link>
   );
 }
 

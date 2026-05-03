@@ -42,8 +42,8 @@ export async function createStripeCheckoutSession(input: {
 
   const body = new URLSearchParams();
   body.set("mode", "payment");
-  body.set("success_url", `${base}/appointments/list?paid=${input.appointment.id}`);
-  body.set("cancel_url", `${base}/appointments/list?cancelled=${input.appointment.id}`);
+  body.set("success_url", `${base}/appointments?paid=${input.appointment.id}`);
+  body.set("cancel_url", `${base}/appointments?cancelled=${input.appointment.id}`);
   body.set("customer_email", input.customerEmail);
   body.set("client_reference_id", input.appointment.id);
   body.set("line_items[0][quantity]", "1");
@@ -98,8 +98,8 @@ export async function createStripeCheckoutSessionForReservation(input: {
 
   const body = new URLSearchParams();
   body.set("mode", "payment");
-  body.set("success_url", `${base}/appointments/list?reservation_paid=${input.reservation.id}`);
-  body.set("cancel_url", `${base}/appointments/list?reservation_cancelled=${input.reservation.id}`);
+  body.set("success_url", `${base}/appointments?reservation_paid=${input.reservation.id}`);
+  body.set("cancel_url", `${base}/appointments?reservation_cancelled=${input.reservation.id}`);
   body.set("customer_email", input.customerEmail);
   body.set("client_reference_id", input.reservation.id);
   body.set("line_items[0][quantity]", "1");

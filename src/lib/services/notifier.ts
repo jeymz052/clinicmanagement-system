@@ -119,8 +119,8 @@ export function renderTemplate(template: string, payload: TemplatePayload): { su
       };
     case "appointment_reminder_24h":
       return {
-        subject: "Reminder: appointment tomorrow",
-        body: `This is a reminder for your appointment (ref ${appt}) tomorrow.${
+        subject: "Reminder: online consultation tomorrow",
+        body: `This is a 24-hour reminder for your online consultation (ref ${appt}) tomorrow.${
           link ? ` Meeting link: ${link}` : ""
         }`,
       };
