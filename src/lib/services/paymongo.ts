@@ -24,12 +24,37 @@ export type PayMongoMethod =
 // and let the user opt into extras once PayMongo finishes activation. The
 // extras can be enabled via PAYMONGO_EXTRA_METHODS_GCASH / _CARD / _BANK
 // env vars (comma-separated) — no code change needed when activation lands.
+//
+// CURRENT ACTIVATION STATUS (as of 2026-05):
+//   - qrph         ✅ activated  (only method live on the merchant account)
+//   - gcash        ⏳ pending
+//   - card         ⏳ pending
+//   - dob (bank)   ⏳ pending
+//
+// While only QR Ph is activated, every group falls back to `qrph` as the
+// primary — QR Ph is universally scannable by GCash, Maya, and any
+// InstaPay / Pesonet-enabled wallet or banking app, so a patient choosing
+// "QR / GCash" still has a working checkout. The UI hides Card and Bank
+// Transfer behind a "Not yet available" state so only QR Ph is reachable
+// from the booking flow today.
+//
+// When PayMongo activates the others, two things flip the experience back on:
+//   1. Set the env vars to add the native method as an extra:
+//        PAYMONGO_EXTRA_METHODS_GCASH = gcash
+//        PAYMONGO_EXTRA_METHODS_CARD  = card
+//        PAYMONGO_EXTRA_METHODS_BANK  = dob,dob_ubp
+//   2. Optionally restore the native primary below (`gcash: "gcash"`, etc.)
+//      so PayMongo highlights the dedicated button instead of the QR.
+//   3. Re-enable the option in `ONLINE_PAYMENT_OPTIONS` in the booking UI.
 export type CheckoutMethodGroup = "gcash" | "card" | "bank";
 
 const PRIMARY_BY_GROUP: Record<CheckoutMethodGroup, PayMongoMethod> = {
-  gcash: "gcash",
-  card: "card",
-  bank: "dob",
+  // While activation is pending, every group's primary is `qrph`. The native
+  // PayMongo method names are kept in this file's type union so `extras` env
+  // vars (and a simple primary swap) flip them on without a refactor.
+  gcash: "qrph",
+  card: "qrph",
+  bank: "qrph",
 };
 
 function readExtraMethods(envName: string): PayMongoMethod[] {

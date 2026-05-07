@@ -4,19 +4,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DashboardHeader } from "./DashboardHeader";
 import { Sidebar } from "./Sidebar";
-import { RoleProvider, useRole } from "./RoleProvider";
+import { useRole } from "./RoleProvider";
 import { canAccessPath } from "@/src/lib/roles";
 
 type LayoutProps = {
   children: React.ReactNode;
 };
 
+// The root <RoleProvider> in app/layout.tsx already wraps the entire app, so
+// this dashboard layout consumes that single shared context instead of
+// nesting another provider. A second provider would mount its own auth
+// listener, fetch /api/v2/me twice, and double the noise of every
+// onAuthStateChange event.
 export default function Layout({ children }: LayoutProps) {
-  return (
-    <RoleProvider>
-      <DashboardShell>{children}</DashboardShell>
-    </RoleProvider>
-  );
+  return <DashboardShell>{children}</DashboardShell>;
 }
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -46,7 +47,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  if (isLoading) {
+  // Only show the full-page "Loading…" gate before we have ANY user info.
+  // Once we know who the user is, keep children mounted across token
+  // refreshes so half-typed forms (e.g. the booking page) survive.
+  if (isLoading && !user) {
     return (
       <div className="flex min-h-[100svh] items-center justify-center bg-slate-50">
         <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">

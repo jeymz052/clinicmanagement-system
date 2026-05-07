@@ -86,8 +86,26 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(DEFAULT_ROLE);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  // `isLoading` is a one-shot gate that consumers (e.g. <Layout>) use to
+  // decide whether to render the whole-page "Loading…" placeholder. We flip
+  // it true on first mount only — after the very first session resolution it
+  // STAYS false forever, even when Supabase fires TOKEN_REFRESHED on tab
+  // focus or USER_UPDATED on a profile change. Re-toggling it back to true
+  // would unmount every page child (booking forms, half-typed notes, modal
+  // state…) every few minutes, which is what the dashboard used to do and
+  // why patients lost in-progress booking drafts on tab switch.
   const [isLoading, setIsLoading] = useState(true);
   const requestSequenceRef = useRef(0);
+  // Tracks whether we've completed at least one applySession() pass, so
+  // subsequent auth events run as silent background updates instead of
+  // toggling the global loading gate.
+  const hasResolvedOnceRef = useRef(false);
+  // Tracks the user id the last applySession resolved against. We use this
+  // to decide whether the profile actually needs a re-fetch (true on real
+  // sign-in / sign-out / user switch) or whether we can skip the network
+  // round-trip (true on routine TOKEN_REFRESHED).
+  const lastUserIdRef = useRef<string | null>(null);
+  const profileRef = useRef<UserProfile | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -96,9 +114,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     async function applySession(nextSession: Session | null) {
       const requestId = ++requestSequenceRef.current;
       if (!active) return;
+
+      const nextUser = isEmailVerified(nextSession?.user ?? null) ? nextSession?.user ?? null : null;
+      const nextUserId = nextUser?.id ?? null;
+      const isUserChange = nextUserId !== lastUserIdRef.current;
+      const isFirstResolution = !hasResolvedOnceRef.current;
+
       setSession(nextSession);
-      setUser(isEmailVerified(nextSession?.user ?? null) ? nextSession?.user ?? null : null);
-      setIsLoading(true);
+      setUser(nextUser);
+
+      // Only show the global loading gate before the very first resolution.
+      // Once we've resolved once, every subsequent applySession call is a
+      // background revalidation — children stay mounted, drafts survive.
+      if (isFirstResolution) {
+        setIsLoading(true);
+      }
 
       if (nextSession?.user && isEmailVerified(nextSession.user)) {
         const optimisticRole = readRoleFromUserMetadata(nextSession.user);
@@ -106,27 +136,41 @@ export function RoleProvider({ children }: { children: ReactNode }) {
           setRole(optimisticRole);
         }
 
-        const dbProfile = await fetchProfileFromApi(nextSession.access_token);
-        if (!active || requestId !== requestSequenceRef.current) return;
+        // Skip the /api/v2/me round-trip on routine token refresh: same user,
+        // we already have their profile in memory. Without this guard,
+        // every TOKEN_REFRESHED event (Supabase fires one on every tab
+        // focus where the access token is older than a few minutes) would
+        // hit the API for nothing.
+        const canSkipFetch = !isUserChange && profileRef.current !== null;
+        if (!canSkipFetch) {
+          const dbProfile = await fetchProfileFromApi(nextSession.access_token);
+          if (!active || requestId !== requestSequenceRef.current) return;
 
-        if (dbProfile) {
-          setProfile(dbProfile);
-          setRole(
-            resolveProtectedUiRole(roleToUiRole(dbProfile.role), dbProfile.email)
-            ?? optimisticRole
-            ?? readRoleFromUser(nextSession.user),
-          );
-        } else {
-          setProfile(null);
-          setRole(optimisticRole ?? readRoleFromUser(nextSession.user));
+          if (dbProfile) {
+            profileRef.current = dbProfile;
+            setProfile(dbProfile);
+            setRole(
+              resolveProtectedUiRole(roleToUiRole(dbProfile.role), dbProfile.email)
+              ?? optimisticRole
+              ?? readRoleFromUser(nextSession.user),
+            );
+          } else {
+            profileRef.current = null;
+            setProfile(null);
+            setRole(optimisticRole ?? readRoleFromUser(nextSession.user));
+          }
         }
       } else {
         if (nextSession?.user && !isEmailVerified(nextSession.user)) {
           await supabase.auth.signOut();
         }
         setRole(DEFAULT_ROLE);
+        profileRef.current = null;
         setProfile(null);
       }
+
+      lastUserIdRef.current = nextUserId;
+      hasResolvedOnceRef.current = true;
       setIsLoading(false);
     }
 
@@ -134,6 +178,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       const { data, error } = result;
       if (!active) return;
       if (error) {
+        hasResolvedOnceRef.current = true;
         setIsLoading(false);
         return;
       }

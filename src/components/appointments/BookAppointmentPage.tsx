@@ -98,13 +98,28 @@ type OnlinePaymentOptionConfig = {
   };
   brands: Array<{ key: string; node: React.ReactNode }>;
   logo: React.ReactNode;
+  // `available: false` keeps the option visible but disabled, with a "Not yet
+  // available" badge. Flip to true once PayMongo activates the underlying
+  // method on the merchant account (see comments in
+  // src/lib/services/paymongo.ts for the full activation flip-list).
+  available: boolean;
+  // Optional explanation shown in the disabled state — kept short so the
+  // button doesn't grow taller when toggled off.
+  unavailableNote?: string;
 };
 
+// NOTE: only `paymongo_gcash` is activated today — it routes to PayMongo's
+// QR Ph rail, which is universally scannable by GCash, Maya, and any
+// InstaPay / Pesonet-enabled wallet or bank app. Card and Online Bank
+// Transfer stay visible (with brand chips) but disabled, so patients can
+// see what's coming and staff have a clear "flip to true" once PayMongo
+// activates those methods on the merchant account. See the activation
+// flip-list in src/lib/services/paymongo.ts.
 const ONLINE_PAYMENT_OPTIONS: OnlinePaymentOptionConfig[] = [
   {
     value: "paymongo_gcash",
-    label: "QR / GCash",
-    detail: "Pay using GCash or any QR Ph supported wallet/bank app.",
+    label: "QR Ph (GCash, Maya, Banks)",
+    detail: "Scan the QR with GCash, Maya, or any InstaPay/Pesonet-enabled wallet or bank app.",
     accent: {
       tileBg: "bg-linear-to-br from-sky-500 to-blue-600",
       ring: "ring-sky-300",
@@ -113,7 +128,6 @@ const ONLINE_PAYMENT_OPTIONS: OnlinePaymentOptionConfig[] = [
     },
     logo: <GCashLogo />,
     brands: [
-      { key: "gcash", node: <BrandChip className="bg-sky-100 text-sky-800">GCash</BrandChip> },
       {
         key: "qrph",
         node: (
@@ -122,8 +136,11 @@ const ONLINE_PAYMENT_OPTIONS: OnlinePaymentOptionConfig[] = [
           </BrandChip>
         ),
       },
+      { key: "gcash", node: <BrandChip className="bg-sky-100 text-sky-800">GCash</BrandChip> },
       { key: "maya", node: <BrandChip className="bg-emerald-100 text-emerald-800">Maya</BrandChip> },
+      { key: "banks", node: <BrandChip className="bg-slate-100 text-slate-700">+ Banks</BrandChip> },
     ],
+    available: true,
   },
   {
     value: "paymongo_card",
@@ -162,6 +179,8 @@ const ONLINE_PAYMENT_OPTIONS: OnlinePaymentOptionConfig[] = [
         ),
       },
     ],
+    available: false,
+    unavailableNote: "Card payments are pending PayMongo activation — please use QR Ph for now.",
   },
   {
     value: "paymongo_bank",
@@ -184,6 +203,8 @@ const ONLINE_PAYMENT_OPTIONS: OnlinePaymentOptionConfig[] = [
       },
       { key: "more", node: <BrandChip className="bg-slate-100 text-slate-700">+ more</BrandChip> },
     ],
+    available: false,
+    unavailableNote: "Direct bank transfer is pending PayMongo activation — please use QR Ph (your bank app can scan it).",
   },
 ];
 
@@ -318,7 +339,11 @@ export default function BookAppointmentPage() {
   const weekDates = useMemo(() => getWeekDates(calendarWeekStart), [calendarWeekStart]);
   const [activeStep, setActiveStep] = useState(1);
 
-  // Restore any saved draft / reservation after auth or page reload
+  // Restore any saved draft / reservation after auth or page reload.
+  // We mark the very first restore so the write-side effect below doesn't
+  // overwrite the saved draft with `INITIAL_FORM` before we've had a chance
+  // to read it.
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   useEffect(() => {
     try {
       const raw = localStorage.getItem("bookingDraft");
@@ -341,8 +366,41 @@ export default function BookAppointmentPage() {
       }
     } catch {
       // ignore
+    } finally {
+      setHasRestoredDraft(true);
     }
   }, [accessToken, requiresAuthForReview]);
+
+  // Persist the draft as the user types so it survives tab switches, hard
+  // refreshes, redirects to /login, and the PayMongo round-trip back to the
+  // app. We only start writing AFTER the restore-from-localStorage effect
+  // has run — otherwise the first render would clobber the saved draft with
+  // `INITIAL_FORM`. The success/reset paths in handleSubmit explicitly
+  // remove `bookingDraft`, so a finished booking won't pre-fill the next.
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (typeof window === "undefined") return;
+    try {
+      // Don't bother persisting an empty form (avoids leaving stale data
+      // for a user who only opened the page and walked away).
+      const isEmptyDraft =
+        !formData.patientName.trim()
+        && !formData.email.trim()
+        && !formData.phone.trim()
+        && !formData.start
+        && !formData.reason.trim();
+      if (isEmptyDraft && activeStep === 1) {
+        localStorage.removeItem("bookingDraft");
+        return;
+      }
+      localStorage.setItem(
+        "bookingDraft",
+        JSON.stringify({ formData, activeStep }),
+      );
+    } catch {
+      // Quota errors / private mode → ignore, the in-memory state still works.
+    }
+  }, [formData, activeStep, hasRestoredDraft]);
 
   const patientDefaults = useMemo(
     () => ({
@@ -1071,34 +1129,52 @@ export default function BookAppointmentPage() {
                           <div className="space-y-2.5">
                             {ONLINE_PAYMENT_OPTIONS.map((option) => {
                               const isSelected = formData.paymentOption === option.value;
+                              const isAvailable = option.available;
                               return (
                                 <button
                                   key={option.value}
                                   type="button"
-                                  onClick={() => updateForm("paymentOption", option.value)}
-                                  aria-pressed={isSelected}
+                                  disabled={!isAvailable}
+                                  onClick={
+                                    isAvailable
+                                      ? () => updateForm("paymentOption", option.value)
+                                      : undefined
+                                  }
+                                  aria-pressed={isAvailable ? isSelected : undefined}
+                                  aria-disabled={!isAvailable || undefined}
+                                  title={!isAvailable ? option.unavailableNote : undefined}
                                   className={`group relative w-full overflow-hidden rounded-2xl border-2 px-3.5 py-3.5 text-left transition-all duration-150 ${
-                                    isSelected
+                                    !isAvailable
+                                      ? "cursor-not-allowed border-dashed border-slate-200 bg-slate-50/70"
+                                      : isSelected
                                       ? `${option.accent.selectedBorder} ${option.accent.selectedBg} shadow-md ring-2 ${option.accent.ring} ring-offset-1`
                                       : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
                                   }`}
                                 >
-                                  <div className="flex items-start gap-3.5">
+                                  <div className={`flex items-start gap-3.5 ${!isAvailable ? "opacity-60" : ""}`}>
                                     {/* Brand logo tile */}
                                     <div className="shrink-0">{option.logo}</div>
 
                                     {/* Label + detail + brand chips */}
                                     <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
                                         <p className="text-sm font-bold text-slate-900">{option.label}</p>
-                                        {isSelected ? (
+                                        {!isAvailable ? (
+                                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 border border-amber-200">
+                                            Not yet available
+                                          </span>
+                                        ) : isSelected ? (
                                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
                                             <FaCheck className="h-2.5 w-2.5" aria-hidden="true" />
                                             Selected
                                           </span>
                                         ) : null}
                                       </div>
-                                      <p className="mt-1 text-xs text-slate-600 leading-snug">{option.detail}</p>
+                                      <p className="mt-1 text-xs text-slate-600 leading-snug">
+                                        {!isAvailable && option.unavailableNote
+                                          ? option.unavailableNote
+                                          : option.detail}
+                                      </p>
                                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                         {option.brands.map((brand) => (
                                           <Fragment key={brand.key}>{brand.node}</Fragment>
@@ -1106,21 +1182,30 @@ export default function BookAppointmentPage() {
                                       </div>
                                     </div>
 
-                                    {/* Radio indicator */}
-                                    <span
-                                      className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
-                                        isSelected
-                                          ? `${option.accent.selectedBorder} bg-white`
-                                          : "border-slate-300 bg-white group-hover:border-slate-400"
-                                      }`}
-                                    >
-                                      {isSelected ? (
-                                        <span
-                                          className={`h-2.5 w-2.5 rounded-full ${option.accent.tileBg}`}
-                                          aria-hidden="true"
-                                        />
-                                      ) : null}
-                                    </span>
+                                    {/* Radio indicator (hidden for unavailable methods) */}
+                                    {isAvailable ? (
+                                      <span
+                                        className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                                          isSelected
+                                            ? `${option.accent.selectedBorder} bg-white`
+                                            : "border-slate-300 bg-white group-hover:border-slate-400"
+                                        }`}
+                                      >
+                                        {isSelected ? (
+                                          <span
+                                            className={`h-2.5 w-2.5 rounded-full ${option.accent.tileBg}`}
+                                            aria-hidden="true"
+                                          />
+                                        ) : null}
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 bg-white"
+                                        aria-hidden="true"
+                                      >
+                                        <FaLock className="h-2.5 w-2.5 text-slate-400" />
+                                      </span>
+                                    )}
                                   </div>
                                 </button>
                               );

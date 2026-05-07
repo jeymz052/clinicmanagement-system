@@ -25,9 +25,11 @@ const DEFAULT_MANUAL_TRANSFER_INSTRUCTIONS =
   "Send the transfer to the clinic's bank account, then wait for staff verification. Your appointment stays unconfirmed until payment is marked as paid.";
 
 // All online consultation payments are processed by PayMongo:
-//   - paymongo_gcash → GCash + QR Ph (local QR-supported wallets/banks)
-//   - paymongo_card  → Visa / Mastercard / JCB
-//   - paymongo_bank  → Direct Online Banking (BPI, UnionBank, RCBC, Chinabank, etc.)
+//   - paymongo_gcash → QR Ph (currently routes everything via QR Ph; once
+//                      PayMongo activates GCash on the merchant account it
+//                      adds GCash alongside QR Ph — see paymongo.ts)
+//   - paymongo_card  → Visa / Mastercard / JCB                  (pending activation)
+//   - paymongo_bank  → Direct Online Banking (BPI, UBP, RCBC…)  (pending activation)
 // `stripe_card` and `bank_transfer` (manual) remain in the union for backward
 // compatibility with reservations created before the migration. New bookings
 // from the UI must use a paymongo_* option.
@@ -37,6 +39,16 @@ export type OnlineCheckoutOption =
   | "paymongo_bank"
   | "stripe_card"
   | "bank_transfer";
+
+// Source-of-truth list of checkout options patients can pick from the booking
+// flow today. The UI hides the rest behind a "Not yet available" badge — this
+// constant lets the server reject hand-crafted requests early with a clear
+// 400 instead of bubbling a PayMongo 400 ("payment method is not enabled on
+// this account"). Add an option back here once the corresponding PayMongo
+// method is activated on the merchant account.
+const ENABLED_NEW_BOOKING_OPTIONS: ReadonlySet<OnlineCheckoutOption> = new Set([
+  "paymongo_gcash",
+]);
 
 export type OnlineCheckoutBookingInput = Pick<
   AppointmentCreatePayload,
@@ -160,6 +172,18 @@ export async function createOnlineCheckoutSession(
 
   const supabase = getSupabaseAdmin();
   const checkoutOption = input.checkoutOption ?? "paymongo_gcash";
+
+  // Belt-and-suspenders for the activation rollout: the UI already disables
+  // every option but `paymongo_gcash`, but a hand-crafted POST could still
+  // smuggle in `paymongo_card` / `paymongo_bank` and would then 400 with a
+  // confusing message from PayMongo. Reject early with a clear, user-facing
+  // error and let the booking page show the "use QR Ph" hint.
+  if (!ENABLED_NEW_BOOKING_OPTIONS.has(checkoutOption)) {
+    throw new HttpError(
+      400,
+      "That payment method isn't available yet. Please choose QR Ph (it accepts GCash, Maya, and bank apps).",
+    );
+  }
 
   // If a reservationId was provided, reuse the existing reservation
   if (input.reservationId) {
