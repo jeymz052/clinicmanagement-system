@@ -26,6 +26,7 @@ import {
   FaVideo,
   FaMapLocationDot,
   FaCloud,
+  FaWandMagicSparkles,
 } from "react-icons/fa6";
 import type { UserRole } from "@/src/lib/roles";
 
@@ -45,7 +46,7 @@ type NavItem = {
 const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   SUPER_ADMIN: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
-    { label: "Users", href: "/users", icon: FaUsers },
+    { label: "Users Management", href: "/users", icon: FaUsers },
     {
       label: "Patients",
       href: "/patients",
@@ -94,6 +95,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
     { label: "Reports", href: "/reports", icon: FaChartLine },
+    { label: "Contents Manager", href: "/contents", icon: FaWandMagicSparkles },
     { label: "Settings", href: "/settings", icon: FaGear },
     { label: "Help Center", href: "/help", icon: FaCircleQuestion },
   ],
@@ -141,7 +143,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   ],
   DOCTOR: [
     { label: "Dashboard", href: "/dashboard", icon: FaHouse },
-    { label: "Users", href: "/users", icon: FaUsers },
+    { label: "Users Management", href: "/users", icon: FaUsers },
     {
       label: "Appointments",
       href: "/appointments/my",
@@ -189,6 +191,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     },
     { label: "Pricing", href: "/pricing", icon: FaCreditCard },
     { label: "Reports", href: "/reports", icon: FaChartLine },
+    { label: "Contents Manager", href: "/contents", icon: FaWandMagicSparkles },
     { label: "Settings", href: "/settings", icon: FaGear },
   ],
   PATIENT: [

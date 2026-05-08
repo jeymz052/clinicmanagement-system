@@ -4,6 +4,7 @@ import type {
   Billing,
   BillingStatus,
   BillingItem,
+  DiscountKind,
   Payment,
   PaymentMethod,
 } from "@/src/lib/db/types";
@@ -23,15 +24,26 @@ export type BillingItemInput = {
 };
 
 const ALLOWED_BILLING_STATUSES = new Set<BillingStatus>(["Draft", "Issued", "Paid", "Void"]);
+const ALLOWED_DISCOUNT_KINDS = new Set<DiscountKind>(["None", "Manual", "SeniorCitizen", "PWD"]);
 
 const POS_ALLOWED_CATEGORIES = new Set(["Consultation", "Lab", "Medicine"]);
 const POS_ALLOWED_METHODS = new Set<PaymentMethod>(["Cash", "Card", "BankTransfer"]);
+
+// RA 9994 / RA 10754: Senior Citizens and PWDs receive a 20% discount and
+// are exempt from VAT on the same transaction. We round to centavos.
+const SC_PWD_DISCOUNT_RATE = 0.2;
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
 
 export async function issueBilling(input: {
   appointment_id: string;
   items: BillingItemInput[];
   discount?: number;
   tax?: number;
+  discount_kind?: DiscountKind;
+  discount_id_number?: string | null;
 }, actor: Actor): Promise<{ billing: Billing; items: BillingItem[] }> {
   if (!isStaff(actor.profile.role) && actor.profile.role !== "doctor")
     throw new HttpError(403, "Forbidden");
@@ -108,7 +120,36 @@ export async function issueBilling(input: {
   };
 
   const allItems = [consultationLine, ...normalizedItems];
-  const subtotal = allItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const subtotal = round2(allItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0));
+
+  // Resolve discount + tax from the discount_kind. SC/PWD overrides any
+  // typed-in numbers so the cashier can't accidentally undercharge or
+  // forget the VAT exemption.
+  const discountKind: DiscountKind = input.discount_kind ?? "None";
+  if (!ALLOWED_DISCOUNT_KINDS.has(discountKind)) {
+    throw new HttpError(400, "Unknown discount kind.");
+  }
+  const discountIdNumber = (input.discount_id_number ?? "").trim() || null;
+  if ((discountKind === "SeniorCitizen" || discountKind === "PWD") && !discountIdNumber) {
+    throw new HttpError(400, `${discountKind === "PWD" ? "PWD" : "Senior Citizen"} ID number is required.`);
+  }
+
+  let resolvedDiscount = Number(input.discount ?? 0);
+  let resolvedTax = Number(input.tax ?? 0);
+  if (discountKind === "SeniorCitizen" || discountKind === "PWD") {
+    resolvedDiscount = round2(subtotal * SC_PWD_DISCOUNT_RATE);
+    resolvedTax = 0; // VAT-exempt
+  } else {
+    if (!Number.isFinite(resolvedDiscount) || resolvedDiscount < 0) {
+      throw new HttpError(400, "Discount must be zero or greater.");
+    }
+    if (!Number.isFinite(resolvedTax) || resolvedTax < 0) {
+      throw new HttpError(400, "Tax must be zero or greater.");
+    }
+    if (resolvedDiscount > subtotal) {
+      throw new HttpError(400, "Discount cannot exceed the subtotal.");
+    }
+  }
 
   const { data: billing, error: billErr } = await supabase
     .from("billings")
@@ -116,10 +157,12 @@ export async function issueBilling(input: {
       appointment_id: appt.id,
       patient_id: appt.patient_id,
       subtotal,
-      discount: input.discount ?? 0,
-      tax: input.tax ?? 0,
+      discount: resolvedDiscount,
+      tax: resolvedTax,
       status: "Issued",
       issued_at: new Date().toISOString(),
+      discount_kind: discountKind,
+      discount_id_number: discountIdNumber,
     })
     .select()
     .single<Billing>();
@@ -154,6 +197,7 @@ export async function recordBillingPayment(
   method: PaymentMethod,
   providerRef: string | null,
   actor: Actor,
+  tenderedAmount: number | null = null,
 ): Promise<{ billing: Billing; payment: Payment }> {
   if (!isStaff(actor.profile.role) && actor.profile.role !== "doctor")
     throw new HttpError(403, "Only clinic staff or doctors can record POS payments");
@@ -176,6 +220,16 @@ export async function recordBillingPayment(
     throw new HttpError(400, "POS payment is clinic-only.");
   }
 
+  // Tendered amount only applies to cash. For Card/Transfer the patient
+  // tendered exactly the total — anything else would be a card mistake.
+  let normalizedTendered: number | null = null;
+  if (method === "Cash" && tenderedAmount != null) {
+    if (!Number.isFinite(tenderedAmount) || tenderedAmount < billing.total) {
+      throw new HttpError(400, `Tendered amount must be at least ${billing.total.toFixed(2)}.`);
+    }
+    normalizedTendered = round2(tenderedAmount);
+  }
+
   const { data: payment, error: payErr } = await supabase
     .from("payments")
     .insert({
@@ -187,6 +241,7 @@ export async function recordBillingPayment(
       paid_at: new Date().toISOString(),
       provider: "manual",
       provider_ref: providerRef,
+      tendered_amount: normalizedTendered,
     })
     .select()
     .single<Payment>();
@@ -233,7 +288,49 @@ export async function getBilling(id: string, actor: Actor) {
   const b = data as Billing & { billing_items: BillingItem[]; payments: Payment[] };
   if (actor.profile.role === "patient" && b.patient_id !== actor.id)
     throw new HttpError(403, "Forbidden");
-  return b;
+
+  // Receipts need the patient's display name. patients.id is a 1:1 FK to
+  // profiles.id, so we can resolve the name with a single profile lookup.
+  const { data: patient } = await supabase
+    .from("profiles")
+    .select("full_name, email, phone")
+    .eq("id", b.patient_id)
+    .maybeSingle<{ full_name: string; email: string | null; phone: string | null }>();
+
+  // Doctor info, derived through the linked appointment. Only present if the
+  // billing is attached to an appointment (which clinic POS bills always are).
+  // doctors.id is a 1:1 FK to profiles.id, so we can fetch the doctor row
+  // and the corresponding profile in parallel using the same id.
+  let doctor: { full_name: string; specialty: string } | null = null;
+  if (b.appointment_id) {
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("doctor_id")
+      .eq("id", b.appointment_id)
+      .maybeSingle<{ doctor_id: string }>();
+    if (appt?.doctor_id) {
+      const [{ data: doc }, { data: docProfile }] = await Promise.all([
+        supabase
+          .from("doctors")
+          .select("specialty")
+          .eq("id", appt.doctor_id)
+          .maybeSingle<{ specialty: string }>(),
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", appt.doctor_id)
+          .maybeSingle<{ full_name: string }>(),
+      ]);
+      if (docProfile) {
+        doctor = {
+          full_name: docProfile.full_name,
+          specialty: doc?.specialty ?? "",
+        };
+      }
+    }
+  }
+
+  return { ...b, patient: patient ?? null, doctor };
 }
 
 export async function updateBilling(
@@ -317,4 +414,83 @@ export async function updateBilling(
   }
 
   return getBilling(id, actor);
+}
+
+/**
+ * Void a billing. Permitted for super_admin, admin, secretary (POS desk),
+ * and the doctor on the appointment. If the bill is already Paid we also
+ * record a `Refunded` payment so the books balance — same provider/method
+ * as the most recent paid payment.
+ *
+ * The appointment is left as-is: the consultation already happened. If the
+ * cashier needs the appointment status reversed, that's a separate concern.
+ */
+export async function voidBilling(
+  id: string,
+  reason: string,
+  actor: Actor,
+): Promise<{ billing: Billing; refundPayment: Payment | null }> {
+  if (!isStaff(actor.profile.role) && actor.profile.role !== "doctor") {
+    throw new HttpError(403, "Only clinic staff or doctors can void POS bills.");
+  }
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 4) {
+    throw new HttpError(400, "Provide a void reason (at least 4 characters).");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: billing, error } = await supabase
+    .from("billings")
+    .select("*")
+    .eq("id", id)
+    .single<Billing>();
+  if (error) throw new HttpError(404, "Billing not found");
+  if (billing.status === "Void") throw new HttpError(400, "Billing is already voided.");
+
+  // If paid, insert a Refunded payment row mirroring the original tender so
+  // the books reconcile. We pick the most recent Paid payment for method.
+  let refundPayment: Payment | null = null;
+  if (billing.status === "Paid") {
+    const { data: lastPaid } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("billing_id", billing.id)
+      .eq("status", "Paid")
+      .order("paid_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<Payment>();
+
+    const { data: refunded, error: refundErr } = await supabase
+      .from("payments")
+      .insert({
+        billing_id: billing.id,
+        appointment_id: billing.appointment_id,
+        amount: billing.total,
+        method: lastPaid?.method ?? "Cash",
+        status: "Refunded",
+        paid_at: new Date().toISOString(),
+        provider: "manual",
+        provider_ref: `void:${id}`,
+        tendered_amount: null,
+      })
+      .select()
+      .single<Payment>();
+    if (refundErr) throw refundErr;
+    refundPayment = refunded;
+  }
+
+  const { data: updated, error: updErr } = await supabase
+    .from("billings")
+    .update({
+      status: "Void",
+      voided_at: new Date().toISOString(),
+      voided_by: actor.id,
+      void_reason: trimmedReason,
+    })
+    .eq("id", billing.id)
+    .select()
+    .single<Billing>();
+  if (updErr) throw updErr;
+
+  return { billing: updated, refundPayment };
 }

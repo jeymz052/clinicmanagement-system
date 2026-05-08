@@ -3,11 +3,83 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaClinicMedical, FaVideo, FaHome, FaEnvelope, FaPhone, FaBars, FaTimes } from "react-icons/fa";
 import { FaHeartPulse, FaQuoteLeft, FaStar, FaUserDoctor } from "react-icons/fa6";
 import BookAppointmentPage from "@/src/components/appointments/BookAppointmentPage";
 import ScrollReveal from "@/src/components/marketing/ScrollReveal";
+import type {
+  LandingContent,
+  LandingHowToStep,
+  LandingNavItem,
+  LandingService,
+  LandingTestimonial,
+} from "@/src/lib/db/types";
+
+// Bundled defaults — used while the DB content is loading and as fallback if
+// the Contents Manager has cleared an image. Keep these in sync with the
+// files committed under /public/images/.
+const DEFAULT_HERO = "/images/chiarabg.png";
+const DEFAULT_DOCTOR = "/images/doctora.png";
+const DEFAULT_TESTIMONIALS: LandingTestimonial[] = [
+  {
+    name: "Maria S.",
+    title: "Clinic Patient",
+    quote: "Dr. Chiara explains everything clearly and makes every visit feel calm, personal, and reassuring.",
+  },
+  {
+    name: "James R.",
+    title: "Online Consultation Patient",
+    quote: "Booking was easy, the online consultation was smooth, and I still felt genuinely cared for from start to finish.",
+  },
+  {
+    name: "Angela T.",
+    title: "Returning Patient",
+    quote: "The clinic feels organized and professional. I appreciate the friendly support and flexible appointment options.",
+  },
+];
+
+const DEFAULT_NAV: LandingNavItem[] = [
+  { label: "Home", href: "#home" },
+  { label: "Services", href: "#services" },
+  { label: "About", href: "#about" },
+  { label: "Testimonials", href: "#testimonials" },
+];
+const DEFAULT_SERVICES: LandingService[] = [
+  {
+    kind: "clinic",
+    title: "Clinic Visit",
+    description: "In-person consultation at our facility",
+    bullets: [
+      { title: "Direct Examination", body: "Thorough medical assessment" },
+      { title: "Face-to-Face Interaction", body: "Better for complex conditions" },
+      { title: "Prescription Services", body: "Direct access to prescriptions" },
+    ],
+  },
+  {
+    kind: "online",
+    title: "Online Consultation",
+    description: "Remote consultation from the comfort of your home",
+    bullets: [
+      { title: "Video Call", body: "Secure and private consultation" },
+      { title: "Convenient Timing", body: "Book from anywhere, anytime" },
+      { title: "Online Payment", body: "Secure PayMongo integration" },
+    ],
+  },
+];
+const DEFAULT_STEPS: LandingHowToStep[] = [
+  { step: 1, title: "Sign In", description: "Create an account or log in to your existing account" },
+  { step: 2, title: "Choose Service", description: "Select clinic visit or online consultation" },
+  { step: 3, title: "Pick Date & Time", description: "Choose your preferred appointment slot" },
+  { step: 4, title: "Confirm & Pay", description: "Review details and complete secure payment" },
+];
+
+// react-icons mapping: services use a different icon per `kind` so the
+// public site keeps the visual cue from the original hardcoded design.
+function serviceIcon(kind: string) {
+  if (kind === "online") return { Icon: FaVideo, accent: "sky" as const };
+  return { Icon: FaClinicMedical, accent: "emerald" as const };
+}
 
 export default function LandingPage() {
   const router = useRouter();
@@ -16,6 +88,77 @@ export default function LandingPage() {
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+  // CMS-backed copy + images. We render with the bundled defaults until the
+  // first fetch resolves, so initial paint never shows blank text.
+  const [content, setContent] = useState<LandingContent | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/v2/landing-content", { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = (await res.json()) as { content: LandingContent };
+        if (active) setContent(payload.content);
+      } catch {
+        // Network failure → render defaults silently.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Pull-with-fallback: if the DB has a value, use it; otherwise use the
+  // hardcoded default. Keeps the UI sturdy against migration ordering.
+  const heroBg = content?.hero_background_url || DEFAULT_HERO;
+  const doctorPhoto = content?.doctor_photo_url || DEFAULT_DOCTOR;
+  const heroEyebrow = content?.hero_eyebrow ?? "";
+  const heroLine1 = content?.hero_title_line1 ?? "Your Health,";
+  const heroLine2 = content?.hero_title_line2 ?? "Our Priority";
+  const heroSubtitle = content?.hero_subtitle ?? "Expert healthcare from Dr. Chiara Punzalan. Book clinic visits or online consultations with flexibility and convenience.";
+  const heroCta1 = content?.hero_cta_primary ?? "Book Appointment Now";
+  const heroCta2 = content?.hero_cta_secondary ?? "Learn More";
+  const aboutEyebrow = content?.about_eyebrow ?? "Meet Your Doctor";
+  const aboutTitle = content?.about_title ?? "Expert Healthcare Provider";
+  const aboutSubtitle = content?.about_subtitle ?? "With years of experience in general medicine and patient care";
+  const doctorName = content?.doctor_name ?? "Dra. Chiara C. Punzalan M.D.";
+  const doctorTitle = content?.doctor_title ?? "General Medicine Specialist";
+  const features = [
+    { title: content?.feature_1_title ?? "Professional Expertise", body: content?.feature_1_body ?? "Comprehensive general medicine practice with focus on patient wellness" },
+    { title: content?.feature_2_title ?? "Flexible Consultation", body: content?.feature_2_body ?? "Choose between clinic visits or online consultations for your convenience" },
+    { title: content?.feature_3_title ?? "Patient-Centered Care", body: content?.feature_3_body ?? "Dedicated to understanding your health concerns and providing quality care" },
+  ];
+  const ctaTitle = content?.cta_title ?? "Ready to Schedule Your Appointment?";
+  const ctaSubtitle = content?.cta_subtitle ?? "Book now with Dr. Chiara Punzalan. Flexible scheduling for clinic and online consultations.";
+  const ctaButton = content?.cta_button_label ?? "Book Appointment Now";
+
+  // Phase 2: nav, services, how-to, testimonials/booking/contact headers,
+  // footer. Same fallback pattern — DB value when present and non-empty,
+  // otherwise the bundled default.
+  const navItems = content?.nav_items.length ? content.nav_items : DEFAULT_NAV;
+  const servicesEyebrow = content?.services_eyebrow ?? "Our Services";
+  const servicesTitle = content?.services_title ?? "Services & Pricing";
+  const servicesSubtitle = content?.services_subtitle ?? "Transparent pricing for both clinic and online consultations";
+  const services = content?.services.length ? content.services : DEFAULT_SERVICES;
+  const howToEyebrow = content?.how_to_eyebrow ?? "Simple Process";
+  const howToTitle = content?.how_to_title ?? "How to Book Your Appointment";
+  const howToSteps = content?.how_to_steps.length ? content.how_to_steps : DEFAULT_STEPS;
+  const testimonialsEyebrow = content?.testimonials_eyebrow ?? "Patient Stories";
+  const testimonialsTitle = content?.testimonials_title ?? "What Patients Say";
+  const testimonialsSubtitle = content?.testimonials_subtitle ?? "Trusted care, thoughtful consultations, and a booking experience designed to feel simple and supportive.";
+  const bookingTitle = content?.booking_title ?? "Book an Appointment";
+  const bookingSubtitle = content?.booking_subtitle ?? "Use the booking widget below to pick service, date and time. You will be prompted to sign in or create an account before final confirmation.";
+  const contactEyebrow = content?.contact_eyebrow ?? "Get in Touch";
+  const contactTitle = content?.contact_title ?? "Contact Chiara Clinic";
+  const contactSubtitle = content?.contact_subtitle ?? "Have questions or need help booking? Send us a message or call us — we're here to help.";
+  const contactInfoTitle = content?.contact_info_title ?? "Contact Info";
+  const contactHoursLabel = content?.contact_hours_label ?? "Office Hours: Mon - Fri, 8:00 AM - 5:00 PM";
+  const footerBrandBlurb = content?.footer_brand_blurb ?? "Expert healthcare with Dr. Chiara C. Punzalan, M.D.";
+  const footerServices = content?.footer_services.length ? content.footer_services : ["Clinic Visits", "Online Consultations", "Appointments"];
+  const footerHours = content?.footer_hours.length ? content.footer_hours : ["Mon - Fri: 8:00 AM - 5:00 PM", "Sat: By Appointment", "Sun: Closed"];
+  const footerContactText = content?.footer_contact_text ?? "Visit our contact section above to send a message or call us directly.";
+  const footerCopyright = content?.footer_copyright ?? "© 2026 Chiara Clinic. All rights reserved.";
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,23 +198,10 @@ export default function LandingPage() {
     else router.push("/#contact");
   };
 
-  const testimonials = [
-    {
-      name: "Maria S.",
-      title: "Clinic Patient",
-      quote: "Dr. Chiara explains everything clearly and makes every visit feel calm, personal, and reassuring.",
-    },
-    {
-      name: "James R.",
-      title: "Online Consultation Patient",
-      quote: "Booking was easy, the online consultation was smooth, and I still felt genuinely cared for from start to finish.",
-    },
-    {
-      name: "Angela T.",
-      title: "Returning Patient",
-      quote: "The clinic feels organized and professional. I appreciate the friendly support and flexible appointment options.",
-    },
-  ];
+  // Use CMS testimonials when present (and non-empty), else the defaults.
+  // Empty array from the CMS reads as "owner cleared them" — we still want
+  // *some* social proof on the page, so we fall back to defaults.
+  const testimonials = content?.testimonials.length ? content.testimonials : DEFAULT_TESTIMONIALS;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-white flex flex-col">
@@ -90,12 +220,20 @@ export default function LandingPage() {
             />
           </div>
 
-          {/* Nav links - hidden on small screens */}
+          {/* Nav links - hidden on small screens. Items + labels are CMS-
+              driven; we keep an icon map for the four common labels and
+              fall back to a generic dot for custom entries. */}
           <div className="hidden h-full items-center justify-center justify-self-center gap-3 md:flex md:translate-x-8">
-            <a href="#home" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-emerald-700"><FaHome className="text-emerald-600" /> Home</a>
-            <a href="#services" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-emerald-700"><FaHeartPulse className="text-emerald-600" /> Services</a>
-            <a href="#about" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-emerald-700"><FaUserDoctor className="text-emerald-600" /> About</a>
-            <a href="#testimonials" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-emerald-700"><FaQuoteLeft className="text-emerald-600" /> Testimonials</a>
+            {navItems.map((n) => (
+              <a
+                key={n.label + n.href}
+                href={n.href}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-emerald-700"
+              >
+                <NavIcon label={n.label} />
+                {n.label}
+              </a>
+            ))}
           </div>
 
           {/* Actions */}
@@ -121,10 +259,17 @@ export default function LandingPage() {
       {mobileOpen && (
         <div className="fixed left-0 right-0 top-16 z-40 border-b border-slate-200 bg-white shadow-md md:hidden">
           <div className="px-4 py-4 space-y-2">
-            <a href="#home" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-emerald-50 flex items-center gap-2"><FaHome /> Home</a>
-            <a href="#services" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-emerald-50 flex items-center gap-2"><FaHeartPulse /> Services</a>
-            <a href="#about" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-emerald-50 flex items-center gap-2"><FaUserDoctor /> About</a>
-            <a href="#testimonials" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-emerald-50 flex items-center gap-2"><FaQuoteLeft /> Testimonials</a>
+            {navItems.map((n) => (
+              <a
+                key={n.label + n.href}
+                href={n.href}
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-slate-700 hover:bg-emerald-50"
+              >
+                <NavIcon label={n.label} />
+                {n.label}
+              </a>
+            ))}
             <div className="pt-3 flex items-center gap-3">
               <button onClick={() => { setMobileOpen(false); handleContactClick(); }} className="flex-1 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
                 Contact Us
@@ -141,7 +286,7 @@ export default function LandingPage() {
         {/* Full Background Image */}
         <div className="absolute inset-0 z-0">
           <Image
-            src="/images/chiarabg.png"
+            src={heroBg}
             alt="Clinic background"
             fill
             className="object-cover object-right"
@@ -160,29 +305,34 @@ export default function LandingPage() {
           direction="right"
         >
           <div>
+            {heroEyebrow ? (
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700 drop-shadow sm:text-sm">
+                {heroEyebrow}
+              </p>
+            ) : null}
             <h1 className="mb-5 text-4xl leading-none font-black text-slate-900 drop-shadow-lg sm:text-5xl sm:leading-tight md:mb-6 md:text-7xl">
-              Your Health,
+              {heroLine1}
               <br />
-              <span className="text-emerald-600">Our Priority</span>
+              <span className="text-emerald-600">{heroLine2}</span>
             </h1>
             <p className="mx-auto mb-8 max-w-3xl text-left text-base leading-relaxed text-slate-700 drop-shadow sm:text-lg md:mb-10 md:ml-auto md:mr-0 md:max-w-xl md:text-right md:text-xl">
-              Expert healthcare from Dr. Chiara Punzalan. Book clinic visits or online consultations with flexibility and convenience.
+              {heroSubtitle}
             </p>
             <div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4 md:justify-end">
               <button
                 onClick={handleBookNow}
                 className="w-full max-w-sm rounded-full bg-linear-to-r from-emerald-600 to-teal-600 px-6 py-3.5 text-base font-bold text-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl sm:w-auto sm:px-8 sm:py-4 sm:text-lg"
               >
-                Book Appointment Now
+                {heroCta1}
               </button>
               <a
                 href="#services"
                 className="inline-block w-full max-w-sm rounded-full border-2 border-emerald-600 px-6 py-3.5 text-center text-base font-bold text-emerald-600 transition hover:bg-emerald-50 sm:w-auto sm:px-8 sm:py-4 sm:text-lg"
               >
-                Learn More
+                {heroCta2}
               </a>
             </div>
-            
+
           </div>
         </ScrollReveal>
 
@@ -194,13 +344,13 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <ScrollReveal className="mb-12 text-center md:mb-16" delayMs={40} direction="none">
             <p className="text-sm font-semibold uppercase tracking-widest text-emerald-700 mb-2">
-              Meet Your Doctor
+              {aboutEyebrow}
             </p>
             <h2 className="mb-4 text-3xl font-black text-slate-900 sm:text-4xl md:text-5xl">
-              Expert Healthcare Provider
+              {aboutTitle}
             </h2>
             <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
-              With years of experience in general medicine and patient care
+              {aboutSubtitle}
             </p>
           </ScrollReveal>
 
@@ -209,8 +359,8 @@ export default function LandingPage() {
               <div className="relative w-full max-w-md rounded-4xl border border-emerald-100 bg-linear-to-b from-white to-emerald-50/70 p-4 shadow-[0_24px_60px_rgba(16,185,129,0.12)] sm:p-6 md:max-w-lg">
                 <div className="absolute -inset-3 rounded-[2.25rem] bg-linear-to-br from-emerald-100 to-teal-100 opacity-50 blur-2xl" />
                 <Image
-                  src="/images/doctora.png"
-                  alt="Dr. Chiara C. Punzalan"
+                  src={doctorPhoto}
+                  alt={doctorName}
                   width={640}
                   height={820}
                   className="relative z-10 mx-auto h-auto w-full object-contain object-center drop-shadow-2xl"
@@ -221,43 +371,23 @@ export default function LandingPage() {
 
             <ScrollReveal className="order-1 md:order-2" delayMs={140} direction="right">
               <h3 className="mb-4 text-2xl font-black text-slate-900 sm:text-3xl">
-                Dra. Chiara C. Punzalan M.D.
+                {doctorName}
               </h3>
-              <p className="text-emerald-700 font-bold text-lg mb-6">General Medicine Specialist</p>
+              <p className="text-emerald-700 font-bold text-lg mb-6">{doctorTitle}</p>
               <div className="space-y-4 mb-8">
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-emerald-100">
-                      <span className="text-emerald-700">✓</span>
+                {features.map((feat, i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="flex-shrink-0">
+                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-emerald-100">
+                        <span className="text-emerald-700">✓</span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">{feat.title}</h4>
+                      <p className="text-slate-600">{feat.body}</p>
                     </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900">Professional Expertise</h4>
-                    <p className="text-slate-600">Comprehensive general medicine practice with focus on patient wellness</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-emerald-100">
-                      <span className="text-emerald-700">✓</span>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900">Flexible Consultation</h4>
-                    <p className="text-slate-600">Choose between clinic visits or online consultations for your convenience</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-emerald-100">
-                      <span className="text-emerald-700">✓</span>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900">Patient-Centered Care</h4>
-                    <p className="text-slate-600">Dedicated to understanding your health concerns and providing quality care</p>
-                  </div>
-                </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -280,13 +410,13 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <ScrollReveal className="mb-12 text-center" delayMs={30} direction="none">
             <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-emerald-700">
-              Patient Stories
+              {testimonialsEyebrow}
             </p>
             <h2 className="text-3xl font-black text-slate-900 sm:text-4xl md:text-5xl">
-              What Patients Say
+              {testimonialsTitle}
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-base text-slate-600 sm:text-lg">
-              Trusted care, thoughtful consultations, and a booking experience designed to feel simple and supportive.
+              {testimonialsSubtitle}
             </p>
           </ScrollReveal>
 
@@ -321,96 +451,58 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <ScrollReveal className="mb-12 text-center" delayMs={30} direction="none">
             <p className="text-sm font-semibold uppercase tracking-widest text-emerald-700 mb-2">
-              Our Services
+              {servicesEyebrow}
             </p>
             <h2 className="mb-4 text-3xl font-black text-slate-900 sm:text-4xl md:text-5xl">
-              Services & Pricing
+              {servicesTitle}
             </h2>
             <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
-              Transparent pricing for both clinic and online consultations
+              {servicesSubtitle}
             </p>
           </ScrollReveal>
 
+          {/* Service cards — driven by the CMS. Each card picks its accent
+              from `kind` ("online" → sky, anything else → emerald). The
+              hourly rate stays a hard reference to ₱350 (matches doctor fees
+              shown in the booking widget); change in /pricing if needed. */}
           <div className="grid gap-6 md:grid-cols-2 md:gap-8">
-            {/* Clinic Visit */}
-            <ScrollReveal delayMs={70} direction="left">
-            <div className="rounded-3xl border-2 border-emerald-100 overflow-hidden transition duration-300 hover:-translate-y-1 hover:shadow-xl">
-              <div className="bg-linear-to-br from-emerald-50 to-teal-50 p-8">
-                <div className="text-5xl mb-4 text-emerald-700"><FaClinicMedical /></div>
-                <h3 className="text-2xl font-black text-slate-900 mb-2">Clinic Visit</h3>
-                <p className="text-slate-600 mb-6">In-person consultation at our facility</p>
+            {services.map((s, i) => {
+              const { Icon, accent } = serviceIcon(s.kind);
+              const dirClass = i % 2 === 0 ? "left" : "right";
+              const isSky = accent === "sky";
+              return (
+                <ScrollReveal key={i} delayMs={70 + i * 100} direction={dirClass as "left" | "right"}>
+                  <div className={`rounded-3xl border-2 ${isSky ? "border-sky-100" : "border-emerald-100"} overflow-hidden transition duration-300 hover:-translate-y-1 hover:shadow-xl`}>
+                    <div className={`p-8 ${isSky ? "bg-linear-to-br from-sky-50 to-blue-50" : "bg-linear-to-br from-emerald-50 to-teal-50"}`}>
+                      <div className={`text-5xl mb-4 ${isSky ? "text-sky-600" : "text-emerald-700"}`}>
+                        <Icon />
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 mb-2">{s.title}</h3>
+                      <p className="text-slate-600 mb-6">{s.description}</p>
 
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-emerald-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Direct Examination</p>
-                      <p className="text-sm text-slate-600">Thorough medical assessment</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-emerald-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Face-to-Face Interaction</p>
-                      <p className="text-sm text-slate-600">Better for complex conditions</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-emerald-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Prescription Services</p>
-                      <p className="text-sm text-slate-600">Direct access to prescriptions</p>
-                    </div>
-                  </div>
-                </div>
+                      {s.bullets.length ? (
+                        <div className="space-y-4 mb-8">
+                          {s.bullets.map((b, bi) => (
+                            <div key={bi} className="flex items-start gap-3">
+                              <span className={`font-bold ${isSky ? "text-sky-600" : "text-emerald-600"}`}>✓</span>
+                              <div>
+                                <p className="font-semibold text-slate-900">{b.title}</p>
+                                <p className="text-sm text-slate-600">{b.body}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
 
-                <div className="border-t border-emerald-200 pt-6">
-                  <p className="text-4xl font-black text-emerald-700">₱350</p>
-                  <p className="text-sm text-slate-600 mt-1">per hour</p>
-                </div>
-              </div>
-            </div>
-            </ScrollReveal>
-
-            {/* Online Consultation */}
-            <ScrollReveal delayMs={170} direction="right">
-            <div className="rounded-3xl border-2 border-sky-100 overflow-hidden transition duration-300 hover:-translate-y-1 hover:shadow-xl">
-              <div className="bg-linear-to-br from-sky-50 to-blue-50 p-8">
-                <div className="text-5xl mb-4 text-sky-600"><FaVideo /></div>
-                <h3 className="text-2xl font-black text-slate-900 mb-2">Online Consultation</h3>
-                <p className="text-slate-600 mb-6">Remote consultation from the comfort of your home</p>
-
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-sky-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Video Call</p>
-                      <p className="text-sm text-slate-600">Secure and private consultation</p>
+                      <div className={`border-t ${isSky ? "border-sky-200" : "border-emerald-200"} pt-6`}>
+                        <p className={`text-4xl font-black ${isSky ? "text-sky-700" : "text-emerald-700"}`}>₱350</p>
+                        <p className="text-sm text-slate-600 mt-1">per hour</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-sky-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Convenient Timing</p>
-                      <p className="text-sm text-slate-600">Book from anywhere, anytime</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-sky-600 font-bold">✓</span>
-                    <div>
-                      <p className="font-semibold text-slate-900">Online Payment</p>
-                      <p className="text-sm text-slate-600">Secure PayMongo integration</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-sky-200 pt-6">
-                  <p className="text-4xl font-black text-sky-700">₱350</p>
-                  <p className="text-sm text-slate-600 mt-1">per hour</p>
-                </div>
-              </div>
-            </div>
-            </ScrollReveal>
+                </ScrollReveal>
+              );
+            })}
           </div>
         </div>
       </ScrollReveal>
@@ -420,37 +512,16 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <ScrollReveal className="mb-12 text-center" delayMs={20} direction="none">
             <p className="text-sm font-semibold uppercase tracking-widest text-emerald-700 mb-2">
-              Simple Process
+              {howToEyebrow}
             </p>
             <h2 className="text-3xl font-black text-slate-900 sm:text-4xl md:text-5xl">
-              How to Book Your Appointment
+              {howToTitle}
             </h2>
           </ScrollReveal>
 
           <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              {
-                step: 1,
-                title: "Sign In",
-                description: "Create an account or log in to your existing account",
-              },
-              {
-                step: 2,
-                title: "Choose Service",
-                description: "Select clinic visit or online consultation",
-              },
-              {
-                step: 3,
-                title: "Pick Date & Time",
-                description: "Choose your preferred appointment slot",
-              },
-              {
-                step: 4,
-                title: "Confirm & Pay",
-                description: "Review details and complete secure payment",
-              },
-            ].map((item, index) => (
-              <ScrollReveal key={item.step} delayMs={index * 90} direction="up">
+            {howToSteps.map((item, index) => (
+              <ScrollReveal key={`${item.step}-${index}`} delayMs={index * 90} direction="up">
               <div className="text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-2xl mx-auto mb-4">
                   {item.step}
@@ -468,16 +539,16 @@ export default function LandingPage() {
       <ScrollReveal as="section" className="order-4 bg-linear-to-r from-emerald-600 to-teal-600 py-16 md:py-24">
         <ScrollReveal className="mx-auto max-w-7xl px-4 text-center sm:px-6" delayMs={40} direction="none">
           <h2 className="mb-6 text-3xl font-black text-white sm:text-4xl md:text-5xl">
-            Ready to Schedule Your Appointment?
+            {ctaTitle}
           </h2>
           <p className="mx-auto mb-10 max-w-2xl text-lg text-emerald-50 sm:text-xl">
-            Book now with Dr. Chiara Punzalan. Flexible scheduling for clinic and online consultations.
+            {ctaSubtitle}
           </p>
           <button
             onClick={handleBookNow}
             className="rounded-full bg-white px-8 py-3.5 text-base font-bold text-emerald-600 transition hover:scale-105 hover:shadow-xl sm:px-10 sm:py-4 sm:text-lg"
           >
-            Book Appointment Now
+            {ctaButton}
           </button>
         </ScrollReveal>
       </ScrollReveal>
@@ -486,8 +557,8 @@ export default function LandingPage() {
       <ScrollReveal as="section" id="booking" className="order-7 bg-white py-16 md:py-24">
         <div className="mx-auto max-w-7xl overflow-hidden px-4 sm:px-6">
           <ScrollReveal className="text-center mb-8" delayMs={30} direction="none">
-            <h2 className="text-3xl font-black text-slate-900 md:text-4xl">Book an Appointment</h2>
-            <p className="text-slate-600 mt-2">Use the booking widget below to pick service, date and time. You will be prompted to sign in or create an account before final confirmation.</p>
+            <h2 className="text-3xl font-black text-slate-900 md:text-4xl">{bookingTitle}</h2>
+            <p className="text-slate-600 mt-2">{bookingSubtitle}</p>
           </ScrollReveal>
           <ScrollReveal delayMs={100} direction="up">
             <BookAppointmentPage />
@@ -499,15 +570,15 @@ export default function LandingPage() {
       <ScrollReveal as="section" id="contact" className="order-8 bg-linear-to-r from-emerald-600 to-teal-600 py-16 md:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <ScrollReveal className="text-center mb-12" delayMs={20} direction="none">
-            <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-emerald-100">Get in Touch</p>
-            <h2 className="text-3xl md:text-4xl font-black text-white">Contact Chiara Clinic</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-emerald-50">Have questions or need help booking? Send us a message or call us — we&rsquo;re here to help.</p>
+            <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-emerald-100">{contactEyebrow}</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white">{contactTitle}</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-emerald-50">{contactSubtitle}</p>
           </ScrollReveal>
 
           <div className="grid items-start gap-8 md:grid-cols-2">
             <ScrollReveal className="space-y-6" delayMs={80} direction="left">
               <div className="rounded-2xl border border-white/35 bg-white/95 p-6 shadow-sm">
-                <h3 className="mb-3 text-xl font-bold text-slate-900">Contact Info</h3>
+                <h3 className="mb-3 text-xl font-bold text-slate-900">{contactInfoTitle}</h3>
                 <div className="space-y-3 text-slate-700">
                   <div className="flex items-center gap-3">
                     <FaPhone className="w-5 h-5 text-emerald-700" />
@@ -517,7 +588,7 @@ export default function LandingPage() {
                     <FaEnvelope className="w-5 h-5 text-emerald-700" />
                     <a href="mailto:info@chiaraclinic.com" className="font-semibold text-slate-900">info@chiaraclinic.com</a>
                   </div>
-                  <div className="pt-2 text-sm text-slate-600">Office Hours: Mon - Fri, 8:00 AM - 5:00 PM</div>
+                  <div className="pt-2 text-sm text-slate-600">{contactHoursLabel}</div>
                 </div>
               </div>
 
@@ -567,45 +638,53 @@ export default function LandingPage() {
                 />
               </div>
               <p className="text-emerald-100">
-                Expert healthcare with Dr. Chiara C. Punzalan, M.D.
+                {footerBrandBlurb}
               </p>
             </div>
 
             <div>
               <h4 className="font-bold mb-4">Services</h4>
               <ul className="space-y-2 text-emerald-100">
-                <li>
-                  <button className="hover:text-white transition">Clinic Visits</button>
-                </li>
-                <li>
-                  <button className="hover:text-white transition">Online Consultations</button>
-                </li>
-                <li>
-                  <button className="hover:text-white transition">Appointments</button>
-                </li>
+                {footerServices.map((label, i) => (
+                  <li key={i}>
+                    <span className="hover:text-white transition">{label}</span>
+                  </li>
+                ))}
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold mb-4">Hours</h4>
               <ul className="space-y-2 text-emerald-100">
-                <li>Mon - Fri: 8:00 AM - 5:00 PM</li>
-                <li>Sat: By Appointment</li>
-                <li>Sun: Closed</li>
+                {footerHours.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold mb-4">Contact</h4>
-              <p className="text-emerald-100">Visit our contact section above to send a message or call us directly.</p>
+              <p className="text-emerald-100">{footerContactText}</p>
             </div>
           </div>
 
           <div className="border-t border-white/20 pt-8 text-center text-emerald-50">
-            <p>&copy; 2026 Chiara Clinic. All rights reserved.</p>
+            <p>{footerCopyright}</p>
           </div>
         </div>
       </footer>
     </div>
   );
+}
+
+// Pick a known icon for the four common nav labels (case-insensitive). Any
+// other label gets a generic dot — keeps the bar from going icon-less when
+// the owner adds something custom like "Pricing" or "Blog".
+function NavIcon({ label }: { label: string }) {
+  const norm = label.trim().toLowerCase();
+  if (norm === "home") return <FaHome className="text-emerald-600" aria-hidden="true" />;
+  if (norm === "services") return <FaHeartPulse className="text-emerald-600" aria-hidden="true" />;
+  if (norm === "about") return <FaUserDoctor className="text-emerald-600" aria-hidden="true" />;
+  if (norm === "testimonials") return <FaQuoteLeft className="text-emerald-600" aria-hidden="true" />;
+  return <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />;
 }

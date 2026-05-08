@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useConsultationNotes } from "@/src/components/clinic/useClinicData";
+import { VitalSignsForm } from "@/src/components/clinic/VitalSignsForm";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import {
   formatDisplayDate,
@@ -229,6 +230,10 @@ export default function OnlineConsultationPage() {
 
                   {isActive && canManage ? (
                     <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      {/* Vitals first — typical workflow is: secretary
+                          captures at check-in, doctor reviews / amends
+                          before writing the clinical note. */}
+                      <VitalSignsForm appointmentId={appointment.id} />
                       <label className="block text-sm font-medium text-slate-700">
                         Consultation Status
                         <select

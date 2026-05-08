@@ -2,6 +2,7 @@ export type AppointmentType = "Clinic" | "Online";
 
 export type AppointmentStatus =
   | "Confirmed"
+  | "Checked In"
   | "In Progress"
   | "Completed";
 
@@ -198,10 +199,16 @@ export function getAppointmentSummary(appointments: AppointmentRecord[]) {
   const clinicCount = appointments.filter((appointment) => appointment.type === "Clinic").length;
   const onlineCount = appointments.length - clinicCount;
   const confirmedCount = appointments.filter(
-    (appointment) => appointment.status === "Confirmed" || appointment.status === "Completed",
+    (appointment) =>
+      appointment.status === "Confirmed"
+      || appointment.status === "Checked In"
+      || appointment.status === "Completed",
   ).length;
   const pendingCount = appointments.filter(
     (appointment) => appointment.status === "In Progress",
+  ).length;
+  const checkedInCount = appointments.filter(
+    (appointment) => appointment.status === "Checked In",
   ).length;
 
   return {
@@ -210,6 +217,7 @@ export function getAppointmentSummary(appointments: AppointmentRecord[]) {
     onlineCount,
     confirmedCount,
     pendingCount,
+    checkedInCount,
   };
 }
 

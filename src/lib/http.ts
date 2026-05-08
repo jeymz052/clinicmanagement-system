@@ -13,21 +13,57 @@ export function ok<T>(body: T, status = 200) {
   return NextResponse.json(body, { status });
 }
 
+// Heuristic: error messages worth showing to the client (they're already
+// user-facing because we built them — e.g. validateSharedSlotOrThrow throws
+// plain Errors with "Selected time is outside the doctor's working hours.").
+// We block messages that look like they leak internals (DB error codes,
+// PostgREST hints, file paths, stack frames).
+function looksLikeInternalLeak(message: string): boolean {
+  if (!message) return true;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("postgres")
+    || lower.includes("pgrst")
+    || lower.includes("relation ")
+    || lower.includes("column ")
+    || lower.includes("violates")
+    || lower.includes("permission denied")
+    || lower.includes("rls")
+    || lower.includes("schema cache")
+    || lower.includes("at /")
+    || lower.includes("c:\\")
+    || lower.includes("eacces")
+    || lower.includes("enoent")
+    || message.length > 300
+  );
+}
+
 export function httpError(e: unknown) {
   if (e instanceof HttpError) {
     return NextResponse.json({ message: e.message }, { status: e.status });
   }
-  const message =
-    e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Internal error";
-  const isUnique = message.includes("duplicate key") || message.includes("unique");
-  const isExclusion = message.includes("conflicting key") || message.includes("exclusion");
+  const rawMessage =
+    e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "";
+  const isUnique = rawMessage.includes("duplicate key") || rawMessage.includes("unique");
+  const isExclusion = rawMessage.includes("conflicting key") || rawMessage.includes("exclusion");
   if (isUnique || isExclusion) {
     return NextResponse.json(
       { message: "Conflict — slot taken or overlaps another booking." },
       { status: 409 },
     );
   }
+  // Always log the raw error to server console for ops/debug.
   console.error("[api]", e);
+
+  // For plain Errors (and Supabase PostgrestError objects) that don't look
+  // like internal leaks, return the actual message — "Internal error" gives
+  // the user no way to tell whether it was a slot conflict, a missing env
+  // var, or PayMongo declining the method. The leak-heuristic above strips
+  // anything that exposes DB internals.
+  if (rawMessage && !looksLikeInternalLeak(rawMessage)) {
+    return NextResponse.json({ message: rawMessage }, { status: 500 });
+  }
+
   return NextResponse.json({ message: "Internal error" }, { status: 500 });
 }
 

@@ -34,6 +34,7 @@ import {
   addDays,
   formatDisplayDate,
   formatRange,
+  getAppointmentSummary,
   getDoctorById,
   getWeekDates,
   type AppointmentType,
@@ -291,7 +292,20 @@ export default function BookAppointmentPage() {
   const pathname = usePathname();
   const requiresAuthForReview = pathname === "/";
   const { accessToken, role, user, profile } = useRole();
-  const { setAppointments, isLoading, error } = useAppointments();
+  const { appointments, setAppointments, isLoading, error } = useAppointments();
+  // Per-user totals — only meaningful when signed in. On the landing page the
+  // user is anonymous, the appointments array stays empty, and we render
+  // marketing chips in the header instead.
+  const summary = useMemo(() => getAppointmentSummary(appointments), [appointments]);
+  const upcomingCount = useMemo(
+    () =>
+      appointments.filter(
+        (a) =>
+          a.date >= today
+          && (a.status === "Confirmed" || a.status === "Checked In"),
+      ).length,
+    [appointments],
+  );
   const { doctors } = useDoctors();
   const [formData, setFormData] = useState<BookingForm>(INITIAL_FORM);
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -597,18 +611,39 @@ export default function BookAppointmentPage() {
 
   return (
     <div className="space-y-6 overflow-x-hidden pb-8">
-      <div className="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_34%),radial-gradient(circle_at_85%_15%,_rgba(34,197,94,0.18),_transparent_20%),linear-gradient(135deg,_#f8fffb,_#effcf3_52%,_#dcfce7)] p-4 shadow-[0_30px_80px_rgba(16,185,129,0.12)] sm:p-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Appointment Booking</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">Book your visit in minutes</h1>
+      {/*
+        Header: auth-aware. Logged-in users see their real per-account totals
+        from getAppointmentSummary(); anonymous visitors on the landing page
+        see marketing chips instead (stats wouldn't apply pre-signup, and
+        showing zeros makes the page look broken).
+      */}
+      <div className="rounded-3xl border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-5 shadow-[0_18px_45px_rgba(16,185,129,0.08)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Book Appointment</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">
+              Schedule a visit with {selectedDoctor?.name?.replace(/^Dra\.\s*/, "Dra. ") ?? "Dra. Chiara C. Punzalan M.D."}
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-600">
+              {accessToken
+                ? "Pick a service, choose a slot, and confirm in four quick steps."
+                : "Browse services and slots freely — sign in only when you're ready to confirm."}
+            </p>
           </div>
-          <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto lg:min-w-0">
-            <StatCard label="Total" value={0} color="slate" />
-            <StatCard label="Clinic" value={0} color="teal" />
-            <StatCard label="Online" value={0} color="sky" />
-            <StatCard label="Pending Action" value={0} color="amber" />
-          </div>
+          {accessToken ? (
+            <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-4 lg:w-auto">
+              <HeaderStat label="Total" value={summary.total} />
+              <HeaderStat label="Clinic" value={summary.clinicCount} />
+              <HeaderStat label="Online" value={summary.onlineCount} />
+              <HeaderStat label="Upcoming" value={upcomingCount} highlight />
+            </div>
+          ) : (
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto lg:max-w-md">
+              <MarketingChip label="Mon-Fri 8am-5pm" />
+              <MarketingChip label="From PHP 350/hr" />
+              <MarketingChip label="Secure PayMongo" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -657,106 +692,131 @@ export default function BookAppointmentPage() {
                 </div>
 
                 <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {(["Clinic", "Online"] as AppointmentType[]).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => updateForm("type", type)}
-                      className={`group overflow-hidden rounded-[1.75rem] border p-6 text-left transition-all duration-300 ${
-                        formData.type === type
-                          ? type === "Clinic"
-                            ? "border-emerald-500 bg-[linear-gradient(180deg,#ecfdf5_0%,#d1fae5_100%)] shadow-[0_20px_35px_rgba(16,185,129,0.16)]"
-                            : "border-teal-500 bg-[linear-gradient(180deg,#f0fdfa_0%,#ccfbf1_100%)] shadow-[0_20px_35px_rgba(13,148,136,0.14)]"
-                          : "border-emerald-100 bg-white hover:-translate-y-1 hover:border-emerald-300 hover:shadow-[0_18px_32px_rgba(16,185,129,0.10)]"
-                      }`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className={`rounded-2xl p-3.5 transition-transform duration-300 group-hover:scale-110 ${
-                          formData.type === type
-                            ? type === "Clinic" ? "bg-white/80" : "bg-white/75"
-                            : "bg-emerald-50"
-                        }`}>
-                          {type === "Clinic" ? (
-                            <svg className={`h-7 w-7 ${formData.type === type ? "text-emerald-700" : "text-emerald-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                          ) : (
-                            <svg className={`h-7 w-7 ${formData.type === type ? "text-teal-700" : "text-teal-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className={`text-lg font-bold ${formData.type === type ? "text-slate-900" : "text-slate-700"}`}>
+                  {(["Clinic", "Online"] as AppointmentType[]).map((type) => {
+                    const selected = formData.type === type;
+                    const Icon = type === "Clinic" ? FaHospital : FaVideo;
+                    const blurb =
+                      type === "Clinic"
+                        ? "In-person visit at the clinic. Pay at the front desk."
+                        : "Video call from home. Pay online before the call.";
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => updateForm("type", type)}
+                        aria-pressed={selected}
+                        className={`group overflow-hidden rounded-2xl border p-5 text-left transition ${
+                          selected
+                            ? "border-emerald-500 bg-emerald-50 shadow-[0_12px_28px_rgba(16,185,129,0.16)] ring-2 ring-emerald-200 ring-offset-1"
+                            : "border-emerald-100 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_12px_24px_rgba(16,185,129,0.10)]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <span
+                            className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition ${
+                              selected ? "bg-white text-emerald-700 shadow-sm" : "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"
+                            }`}
+                            aria-hidden="true"
+                          >
+                            <Icon className="h-6 w-6" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className={`text-lg font-bold ${selected ? "text-slate-900" : "text-slate-800"}`}>
                                 {type === "Clinic" ? "Clinic Visit" : "Online Consultation"}
                               </p>
-                              <p className={`mt-2 text-sm ${formData.type === type ? "text-slate-700" : "text-slate-600"}`}>
-                                {type === "Clinic" 
-                                  ? "Visit our clinic for an in-person consultation" 
-                                  : "Video consultation from the comfort of your home"}
-                              </p>
+                              {selected ? (
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                                  <FaCheck className="h-2.5 w-2.5" aria-hidden="true" /> Selected
+                                </span>
+                              ) : (
+                                <span className="inline-flex shrink-0 rounded-full border border-emerald-200 bg-white px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                                  Choose
+                                </span>
+                              )}
                             </div>
-                            <span className={`inline-flex shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
-                              formData.type === type
-                                ? type === "Clinic"
-                                  ? "bg-white/80 text-emerald-700"
-                                  : "bg-white/80 text-teal-700"
-                                : "bg-emerald-50 text-emerald-600"
-                            }`}>
-                              {formData.type === type ? "Selected" : "Choose"}
-                            </span>
+                            <p className="mt-1.5 text-sm text-slate-600 leading-snug">{blurb}</p>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <div className="rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)] p-5.5 shadow-sm">
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">Selected Doctor</label>
-                    <div className="mt-4 w-full rounded-[1.4rem] border-2 border-emerald-200 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] px-4 py-4 text-base font-bold text-slate-900 shadow-sm">
-                      {selectedDoctor?.name ?? "Dra. Chiara C. Punzalan M.D."}
-                    </div>
-                    {selectedDoctor?.specialty && (
-                      <p className="mt-2.5 text-sm text-slate-600">
-                        <span className="text-emerald-700 font-semibold">{selectedDoctor.specialty}</span>
+                {/*
+                  Single consolidated doctor card — used to be two side-by-side
+                  cards that repeated the doctor's name and specialty. Now we
+                  show the avatar/initials, name, and specialty once, with the
+                  two rates as inline tiles and the optional Online duration
+                  picker below.
+                */}
+                <div className="mt-8 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <span
+                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-base font-black text-emerald-700"
+                      aria-hidden="true"
+                    >
+                      {(selectedDoctor?.name ?? "C P")
+                        .replace(/^Dra?\.\s*/, "")
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join("")}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Your Doctor</p>
+                      <p className="mt-1 text-base font-bold text-slate-900">
+                        {selectedDoctor?.name ?? "Dra. Chiara C. Punzalan M.D."}
                       </p>
-                    )}
+                      {selectedDoctor?.specialty ? (
+                        <p className="text-sm text-slate-600">{selectedDoctor.specialty}</p>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#dcfce7_100%)] p-5.5 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Consultation Rates</p>
-                    <p className="mt-3 text-lg font-bold text-slate-900">{selectedDoctor?.name ?? "Your Doctor"}</p>
-                    {selectedDoctor?.specialty && (
-                      <p className="mt-1 text-sm text-slate-700 font-medium">{selectedDoctor.specialty}</p>
-                    )}
-                    <div className="mt-4 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-                      <div className="rounded-[1.2rem] border border-white/70 bg-white/80 px-3.5 py-3.5 shadow-sm">
-                        <p className="text-slate-600 font-medium">Clinic / Hr</p>
-                        <p className="mt-2.5 text-xl font-bold text-slate-900">PHP {fees.clinic.toLocaleString()}</p>
-                      </div>
-                      <div className="rounded-[1.2rem] border border-white/70 bg-white/80 px-3.5 py-3.5 shadow-sm">
-                        <p className="text-slate-600 font-medium">Online / Hr</p>
-                        <p className="mt-2.5 text-xl font-bold text-slate-900">PHP {ONLINE_CONSULTATION_HOURLY_RATE.toLocaleString()}</p>
-                      </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div
+                      className={`rounded-xl border px-3.5 py-3 transition ${
+                        formData.type === "Clinic" ? "border-emerald-300 bg-emerald-50" : "border-emerald-100 bg-white"
+                      }`}
+                    >
+                      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                        <FaHospital className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                        Clinic / hr
+                      </p>
+                      <p className="mt-1.5 text-lg font-bold text-slate-900">PHP {fees.clinic.toLocaleString()}</p>
                     </div>
-                    {formData.type === "Online" ? (
-                      <div className="mt-3.5 rounded-[1.2rem] border border-white/70 bg-white/80 px-3.5 py-3.5 shadow-sm">
-                        <label htmlFor="duration" className="text-slate-600 font-medium text-xs">Duration</label>
-                        <select
-                          id="duration"
-                          value={formData.durationMinutes}
-                          onChange={(event) => updateForm("durationMinutes", event.target.value as "60")}
-                          className="mt-2.5 w-full rounded-2xl border border-emerald-100 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 cursor-pointer"
-                        >
-                          <option value="60">1 hour - PHP 350</option>
-                        </select>
-                      </div>
-                    ) : null}
+                    <div
+                      className={`rounded-xl border px-3.5 py-3 transition ${
+                        formData.type === "Online" ? "border-emerald-300 bg-emerald-50" : "border-emerald-100 bg-white"
+                      }`}
+                    >
+                      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                        <FaVideo className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                        Online / hr
+                      </p>
+                      <p className="mt-1.5 text-lg font-bold text-slate-900">
+                        PHP {ONLINE_CONSULTATION_HOURLY_RATE.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
+
+                  {formData.type === "Online" ? (
+                    <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-3">
+                      <label htmlFor="duration" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                        Duration
+                      </label>
+                      <select
+                        id="duration"
+                        value={formData.durationMinutes}
+                        onChange={(event) => updateForm("durationMinutes", event.target.value as "60")}
+                        className="mt-2 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 cursor-pointer"
+                      >
+                        <option value="60">1 hour — PHP 350</option>
+                      </select>
+                    </div>
+                  ) : null}
                 </div>
               </section>
 
@@ -884,23 +944,42 @@ export default function BookAppointmentPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
                         {weekDates.map((date) => {
-                          const dayLabel = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(new Date(`${date}T00:00:00`));
+                          const localDate = new Date(`${date}T00:00:00`);
+                          const dayLabel = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(localDate);
+                          const dayNum = new Intl.DateTimeFormat("en-US", { day: "numeric" }).format(localDate);
+                          const monthLabel = new Intl.DateTimeFormat("en-US", { month: "short" }).format(localDate);
                           const isSelected = formData.date === date;
+                          const isToday = date === today;
+                          const isPast = date < today;
                           return (
                             <button
                               key={date}
                               type="button"
+                              disabled={isPast}
                               onClick={() => updateForm("date", date)}
-                              className={`group rounded-[1.35rem] border px-3 py-3.5 text-left transition-all duration-200 ${
+                              aria-pressed={isSelected}
+                              className={`relative rounded-xl border px-2.5 py-2.5 text-center transition ${
                                 isSelected
-                                  ? "border-emerald-500 bg-[linear-gradient(180deg,#ecfdf5_0%,#d1fae5_100%)] shadow-[0_12px_24px_rgba(16,185,129,0.12)]"
-                                  : "border-emerald-100 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/50 hover:shadow-[0_8px_16px_rgba(16,185,129,0.08)]"
+                                  ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_10px_22px_rgba(16,185,129,0.22)]"
+                                  : isPast
+                                  ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                                  : "border-emerald-100 bg-white text-slate-900 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/60"
                               }`}
                             >
-                              <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isSelected ? "text-emerald-700" : "text-slate-500"}`}>{dayLabel}</p>
-                              <p className={`mt-2 text-sm font-bold ${isSelected ? "text-emerald-900" : "text-slate-900"}`}>{formatDisplayDate(date)}</p>
+                              {isToday && !isSelected ? (
+                                <span className="absolute right-1.5 top-1.5 inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                              ) : null}
+                              <p className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${isSelected ? "text-white/90" : "text-slate-500"}`}>
+                                {dayLabel}
+                              </p>
+                              <p className={`mt-1 text-xl font-black leading-none ${isSelected ? "text-white" : isPast ? "text-slate-400" : "text-slate-900"}`}>
+                                {dayNum}
+                              </p>
+                              <p className={`mt-1 text-[10px] font-medium ${isSelected ? "text-white/85" : "text-slate-500"}`}>
+                                {isToday ? "Today" : monthLabel}
+                              </p>
                             </button>
                           );
                         })}
@@ -1367,17 +1446,32 @@ function SummaryRow({
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: "slate" | "teal" | "sky" | "amber" }) {
-  const colorMap = {
-    slate: "border-white/70 bg-white/80",
-    teal: "border-emerald-100 bg-white/85",
-    sky: "border-teal-100 bg-white/85",
-    amber: "border-lime-100 bg-white/85",
-  };
+// Compact stat tile used by the header when the patient is signed in. Values
+// come from getAppointmentSummary() so they always reflect the user's own
+// account; the "Upcoming" highlight tile gets a subtle emerald fill so the
+// most actionable number reads first.
+function HeaderStat({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-[1.4rem] border p-4 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_32px_rgba(16,185,129,0.12)] ${colorMap[color]}`}>
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-black text-slate-900 sm:text-3xl">{value}</p>
+    <div
+      className={`min-w-0 rounded-xl border px-3.5 py-2.5 transition ${
+        highlight
+          ? "border-emerald-300 bg-emerald-50"
+          : "border-emerald-100 bg-white"
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className={`mt-1 text-2xl font-black leading-none ${highlight ? "text-emerald-700" : "text-slate-900"}`}>{value}</p>
+    </div>
+  );
+}
+
+// Marketing chip shown only on the public landing page (no auth). Flat,
+// no values — just a quick trust cue while the visitor decides whether to
+// sign up. The actual booking still gates payment behind sign-in (Step 4).
+function MarketingChip({ label }: { label: string }) {
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-white px-3.5 py-2 text-center">
+      <p className="text-[11px] font-semibold text-slate-700">{label}</p>
     </div>
   );
 }

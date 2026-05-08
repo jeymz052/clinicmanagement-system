@@ -24,8 +24,14 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   create type appt_status as enum
-    ('PendingPayment','Confirmed','InProgress','Completed','Cancelled','NoShow');
+    ('PendingPayment','Confirmed','CheckedIn','InProgress','Completed','Cancelled','NoShow');
 exception when duplicate_object then null; end $$;
+
+-- Re-run safety: older deployments created the enum without 'CheckedIn'.
+-- Add it in place if it is missing so the schema converges either way.
+do $$ begin
+  alter type public.appt_status add value if not exists 'CheckedIn' after 'Confirmed';
+exception when others then null; end $$;
 
 do $$ begin
   create type payment_status as enum ('Pending','Paid','Failed','Refunded');
@@ -193,6 +199,15 @@ create table if not exists public.billings (
   created_at timestamptz not null default now()
 );
 
+-- POS enhancements: SC/PWD discount kind + void audit (re-run safe).
+alter table public.billings
+  add column if not exists discount_kind text not null default 'None'
+    check (discount_kind in ('None','Manual','SeniorCitizen','PWD'));
+alter table public.billings add column if not exists discount_id_number text;
+alter table public.billings add column if not exists voided_at timestamptz;
+alter table public.billings add column if not exists voided_by uuid references public.profiles(id);
+alter table public.billings add column if not exists void_reason text;
+
 create table if not exists public.billing_items (
   id uuid primary key default gen_random_uuid(),
   billing_id uuid not null references public.billings(id) on delete cascade,
@@ -221,6 +236,9 @@ create table if not exists public.payments (
 create unique index if not exists payments_provider_ref_uidx
   on public.payments(provider, provider_ref) where provider_ref is not null;
 
+-- Tendered amount (cash received) for change-due math; null = exact tender.
+alter table public.payments add column if not exists tendered_amount numeric(10,2);
+
 -- ---------- CONSULTATION NOTES ----------
 create table if not exists public.consultation_notes (
   id uuid primary key default gen_random_uuid(),
@@ -229,6 +247,105 @@ create table if not exists public.consultation_notes (
   chief_complaint text,
   diagnosis text,
   prescription text,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- ---------- LANDING PAGE CONTENT (singleton) ----------
+-- Editable hero / about / CTA / testimonials for the public landing page.
+-- See migrations/20260508_landing_content.sql for full rationale.
+create table if not exists public.landing_content (
+  id boolean primary key default true check (id),
+  hero_eyebrow text not null default '',
+  hero_title_line1 text not null default 'Your Health,',
+  hero_title_line2 text not null default 'Our Priority',
+  hero_subtitle text not null default 'Expert healthcare from Dr. Chiara Punzalan. Book clinic visits or online consultations with flexibility and convenience.',
+  hero_cta_primary text not null default 'Book Appointment Now',
+  hero_cta_secondary text not null default 'Learn More',
+  hero_background_url text,
+  about_eyebrow text not null default 'Meet Your Doctor',
+  about_title text not null default 'Expert Healthcare Provider',
+  about_subtitle text not null default 'With years of experience in general medicine and patient care',
+  doctor_name text not null default 'Dra. Chiara C. Punzalan M.D.',
+  doctor_title text not null default 'General Medicine Specialist',
+  doctor_photo_url text,
+  feature_1_title text not null default 'Professional Expertise',
+  feature_1_body text not null default 'Comprehensive general medicine practice with focus on patient wellness',
+  feature_2_title text not null default 'Flexible Consultation',
+  feature_2_body text not null default 'Choose between clinic visits or online consultations for your convenience',
+  feature_3_title text not null default 'Patient-Centered Care',
+  feature_3_body text not null default 'Dedicated to understanding your health concerns and providing quality care',
+  cta_title text not null default 'Ready to Schedule Your Appointment?',
+  cta_subtitle text not null default 'Book now with Dr. Chiara Punzalan. Flexible scheduling for clinic and online consultations.',
+  cta_button_label text not null default 'Book Appointment Now',
+  testimonials jsonb not null default '[]'::jsonb,
+  -- Phase 2: nav, services, how-to-book, section headers, footer
+  nav_items jsonb not null default '[
+    {"label":"Home","href":"#home"},
+    {"label":"Services","href":"#services"},
+    {"label":"About","href":"#about"},
+    {"label":"Testimonials","href":"#testimonials"}
+  ]'::jsonb,
+  services_eyebrow text not null default 'Our Services',
+  services_title text not null default 'Services & Pricing',
+  services_subtitle text not null default 'Transparent pricing for both clinic and online consultations',
+  services jsonb not null default '[
+    {"kind":"clinic","title":"Clinic Visit","description":"In-person consultation at our facility","bullets":[
+      {"title":"Direct Examination","body":"Thorough medical assessment"},
+      {"title":"Face-to-Face Interaction","body":"Better for complex conditions"},
+      {"title":"Prescription Services","body":"Direct access to prescriptions"}
+    ]},
+    {"kind":"online","title":"Online Consultation","description":"Remote consultation from the comfort of your home","bullets":[
+      {"title":"Video Call","body":"Secure and private consultation"},
+      {"title":"Convenient Timing","body":"Book from anywhere, anytime"},
+      {"title":"Online Payment","body":"Secure PayMongo integration"}
+    ]}
+  ]'::jsonb,
+  how_to_eyebrow text not null default 'Simple Process',
+  how_to_title text not null default 'How to Book Your Appointment',
+  how_to_steps jsonb not null default '[
+    {"step":1,"title":"Sign In","description":"Create an account or log in to your existing account"},
+    {"step":2,"title":"Choose Service","description":"Select clinic visit or online consultation"},
+    {"step":3,"title":"Pick Date & Time","description":"Choose your preferred appointment slot"},
+    {"step":4,"title":"Confirm & Pay","description":"Review details and complete secure payment"}
+  ]'::jsonb,
+  testimonials_eyebrow text not null default 'Patient Stories',
+  testimonials_title text not null default 'What Patients Say',
+  testimonials_subtitle text not null default 'Trusted care, thoughtful consultations, and a booking experience designed to feel simple and supportive.',
+  booking_title text not null default 'Book an Appointment',
+  booking_subtitle text not null default 'Use the booking widget below to pick service, date and time. You will be prompted to sign in or create an account before final confirmation.',
+  contact_eyebrow text not null default 'Get in Touch',
+  contact_title text not null default 'Contact Chiara Clinic',
+  contact_subtitle text not null default 'Have questions or need help booking? Send us a message or call us — we''re here to help.',
+  contact_info_title text not null default 'Contact Info',
+  contact_hours_label text not null default 'Office Hours: Mon - Fri, 8:00 AM - 5:00 PM',
+  footer_brand_blurb text not null default 'Expert healthcare with Dr. Chiara C. Punzalan, M.D.',
+  footer_services jsonb not null default '["Clinic Visits","Online Consultations","Appointments"]'::jsonb,
+  footer_hours jsonb not null default '["Mon - Fri: 8:00 AM - 5:00 PM","Sat: By Appointment","Sun: Closed"]'::jsonb,
+  footer_contact_text text not null default 'Visit our contact section above to send a message or call us directly.',
+  footer_copyright text not null default '© 2026 Chiara Clinic. All rights reserved.',
+  updated_at timestamptz not null default now(),
+  updated_by uuid references public.profiles(id)
+);
+insert into public.landing_content (id) values (true) on conflict (id) do nothing;
+
+-- ---------- VITAL SIGNS ----------
+-- Captured per visit. See migrations/20260508_vital_signs.sql for the full
+-- rationale. Stored separately from consultation_notes so the secretary can
+-- write at check-in without column-level RLS.
+create table if not exists public.vital_signs (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid unique not null references public.appointments(id) on delete cascade,
+  recorded_by uuid references public.profiles(id),
+  bp_systolic smallint check (bp_systolic between 0 and 300),
+  bp_diastolic smallint check (bp_diastolic between 0 and 200),
+  temperature_c numeric(4,1) check (temperature_c between 25 and 45),
+  pulse_rate smallint check (pulse_rate between 0 and 300),
+  oxygen_saturation smallint check (oxygen_saturation between 0 and 100),
+  respiratory_rate smallint check (respiratory_rate between 0 and 100),
+  weight_kg numeric(5,2) check (weight_kg between 0 and 600),
+  height_cm numeric(5,2) check (height_cm between 0 and 300),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -299,6 +416,16 @@ do $$ begin
     for each row execute function public.set_updated_at();
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  create trigger trg_vitals_updated before update on public.vital_signs
+    for each row execute function public.set_updated_at();
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create trigger trg_landing_content_updated before update on public.landing_content
+    for each row execute function public.set_updated_at();
+exception when duplicate_object then null; end $$;
+
 -- ---------- AUTO-CREATE PROFILE ON SIGNUP ----------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -343,6 +470,8 @@ alter table public.doctor_schedules     enable row level security;
 alter table public.doctor_unavailability enable row level security;
 alter table public.appointments         enable row level security;
 alter table public.consultation_notes   enable row level security;
+alter table public.vital_signs           enable row level security;
+alter table public.landing_content       enable row level security;
 alter table public.billings             enable row level security;
 alter table public.billing_items        enable row level security;
 alter table public.payments             enable row level security;
@@ -429,6 +558,45 @@ create policy notes_read on public.consultation_notes for select
 drop policy if exists notes_doctor_write on public.consultation_notes;
 create policy notes_doctor_write on public.consultation_notes for all
   using (doctor_id = auth.uid()) with check (doctor_id = auth.uid());
+
+-- VITAL SIGNS (secretary at check-in OR doctor during consultation)
+drop policy if exists vitals_read on public.vital_signs;
+create policy vitals_read on public.vital_signs for select
+  using (
+    public.is_staff()
+    or exists (
+      select 1 from public.appointments a
+      where a.id = appointment_id
+        and (a.patient_id = auth.uid() or a.doctor_id = auth.uid())
+    )
+  );
+
+drop policy if exists vitals_clinic_write on public.vital_signs;
+create policy vitals_clinic_write on public.vital_signs for all
+  using (
+    public.is_staff()
+    or exists (
+      select 1 from public.appointments a
+      where a.id = appointment_id and a.doctor_id = auth.uid()
+    )
+  )
+  with check (
+    public.is_staff()
+    or exists (
+      select 1 from public.appointments a
+      where a.id = appointment_id and a.doctor_id = auth.uid()
+    )
+  );
+
+-- LANDING CONTENT (public read, super_admin/doctor write)
+drop policy if exists landing_read on public.landing_content;
+create policy landing_read on public.landing_content for select
+  using (true);
+
+drop policy if exists landing_write on public.landing_content;
+create policy landing_write on public.landing_content for all
+  using (public.current_role() in ('super_admin', 'doctor'))
+  with check (public.current_role() in ('super_admin', 'doctor'));
 
 -- BILLINGS / ITEMS / PAYMENTS (staff-only write; patient reads own)
 drop policy if exists billings_read on public.billings;

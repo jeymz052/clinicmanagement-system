@@ -254,6 +254,31 @@ export async function cancelAppointment(id: string, actor: Actor) {
   return data;
 }
 
+export async function markArrived(id: string, actor: Actor) {
+  // Front-desk-only step. Doctors and patients don't toggle this — the
+  // secretary records arrival when the patient walks in. Online visits
+  // never check in physically, so they're rejected here.
+  if (!isStaff(actor.profile.role))
+    throw new HttpError(403, "Only front-desk staff can mark a patient as arrived");
+
+  const appt = await getAppointment(id);
+  if (appt.appointment_type !== "Clinic")
+    throw new HttpError(400, "Only clinic visits can be checked in");
+  if (appt.status === "CheckedIn") return appt;
+  if (appt.status !== "Confirmed")
+    throw new HttpError(400, `Cannot check in from status ${appt.status}`);
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ status: "CheckedIn" })
+    .eq("id", id)
+    .select()
+    .single<Appointment>();
+  if (error) throw error;
+  return data;
+}
+
 export async function startConsultation(id: string, actor: Actor) {
   if (actor.profile.role !== "doctor" && !isStaff(actor.profile.role))
     throw new HttpError(403, "Only doctors can start consultations");
@@ -262,8 +287,17 @@ export async function startConsultation(id: string, actor: Actor) {
     throw new HttpError(403, "Not your appointment");
   if (appt.status === "Cancelled")
     throw new HttpError(400, "Cannot start — online payment not confirmed");
-  if (appt.status !== "Confirmed")
+
+  // Clinic visits must be checked in first; online visits jump straight from
+  // Confirmed to InProgress because there is no physical arrival.
+  if (appt.appointment_type === "Clinic") {
+    if (appt.status === "Confirmed")
+      throw new HttpError(400, "Mark the patient as arrived before starting the consultation");
+    if (appt.status !== "CheckedIn")
+      throw new HttpError(400, `Cannot start from status ${appt.status}`);
+  } else if (appt.status !== "Confirmed") {
     throw new HttpError(400, `Cannot start from status ${appt.status}`);
+  }
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase

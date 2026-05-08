@@ -160,15 +160,36 @@ export async function createOnlineCheckoutSession(
     throw new HttpError(403, "Forbidden");
   }
 
+  // Stage logs make failures grep-able in production logs and turn the
+  // generic "Internal error" the patient sees into a precise stack-of-stages
+  // for the developer. Each line is prefixed `[online-checkout]` so it can
+  // be filtered cleanly in Vercel.
+  const logCtx = {
+    actorId: actor.id,
+    actorRole: actor.profile.role,
+    date: input.date,
+    start: input.start,
+    type: "Online" as const,
+    checkoutOption: input.checkoutOption ?? "paymongo_gcash",
+    reservationId: input.reservationId ?? null,
+  };
+  const stage = (name: string, extra: Record<string, unknown> = {}) => {
+    console.info(`[online-checkout] ${name}`, { ...logCtx, ...extra });
+  };
+  stage("start");
+
   const doctorId = await resolveAssignedDoctorUuid();
+  stage("resolved-doctor", { doctorId });
   const patientId = await resolveBookingPatientId(input, {
     actorRole: actor.profile.role === "patient" ? "PATIENT" : undefined,
     actorUserId: actor.profile.role === "patient" ? actor.id : undefined,
   });
+  stage("resolved-patient", { patientId });
   const start_time = `${input.start}:00`;
   const end_time = `${addOneHour(input.start)}:00`;
   await getDoctor(doctorId);
   const amount = calculateOnlineConsultationCharge(start_time, end_time);
+  stage("computed-amount", { amount });
 
   const supabase = getSupabaseAdmin();
   const checkoutOption = input.checkoutOption ?? "paymongo_gcash";
@@ -280,6 +301,7 @@ export async function createOnlineCheckoutSession(
   }
 
   // Otherwise create a new reservation as before
+  stage("validating-slot");
   const { queueNumber } = await validateSharedSlotOrThrow({
     doctorUuid: doctorId,
     date: input.date,
@@ -288,6 +310,7 @@ export async function createOnlineCheckoutSession(
     type: "Online",
     patientId,
   });
+  stage("validated-slot", { queueNumber });
 
   const { data: reservation, error: reservationError } = await supabase
     .from("online_booking_reservations")
@@ -304,7 +327,17 @@ export async function createOnlineCheckoutSession(
     })
     .select()
     .single<OnlineBookingReservation>();
-  if (reservationError) throw reservationError;
+  if (reservationError) {
+    console.error("[online-checkout] reservation-insert-failed", {
+      ...logCtx,
+      error: reservationError.message,
+      details: reservationError.details,
+      hint: reservationError.hint,
+      code: reservationError.code,
+    });
+    throw reservationError;
+  }
+  stage("inserted-reservation", { reservationId: reservation.id });
 
   try {
     if (checkoutOption === "bank_transfer") {
@@ -351,16 +384,19 @@ export async function createOnlineCheckoutSession(
       };
     }
 
+    const paymentMethods = mapCheckoutMethods(paymongoMethodGroup(checkoutOption));
+    stage("calling-paymongo", { paymentMethods });
     const checkout = await createPayMongoCheckoutSession({
       description: `Online consultation on ${reservation.appointment_date}`,
       amount,
       customerEmail: input.email,
       customerName: input.patientName,
       customerPhone: input.phone,
-      paymentMethods: mapCheckoutMethods(paymongoMethodGroup(checkoutOption)),
+      paymentMethods,
       successPath: `/appointments?reservation_paid=${encodeURIComponent(reservation.id)}`,
       metadata: { reservation_id: reservation.id },
     });
+    stage("paymongo-session-created", { sessionId: checkout.sessionId });
 
     const { data: updated, error: updateError } = await supabase
       .from("online_booking_reservations")
@@ -639,6 +675,7 @@ export async function failPaymentByRef(provider: string, provider_ref: string): 
       provider_ref,
       paid_at: null,
       created_at: new Date().toISOString(),
+      tendered_amount: null,
     };
   }
 

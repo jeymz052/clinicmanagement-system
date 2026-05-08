@@ -4,6 +4,18 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
     qualities: [100, 75],
+    // Allow images served from Supabase Storage public buckets — the
+    // Contents Manager uploads landing-page images into the
+    // `landing-assets` bucket and stores the public URL on the
+    // landing_content row. Without this, next/image would refuse to load
+    // them.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
   },
   async headers() {
     return [

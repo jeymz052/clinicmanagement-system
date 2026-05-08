@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { FaPowerOff, FaRegPenToSquare } from "react-icons/fa6";
+import {
+  FaCircleCheck,
+  FaCircleExclamation,
+  FaPenToSquare,
+  FaPowerOff,
+  FaShieldHalved,
+  FaUserDoctor,
+  FaUserGear,
+  FaUserPlus,
+  FaUserShield,
+  FaUserTie,
+  FaUsers,
+  FaXmark,
+} from "react-icons/fa6";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import type { DbRole, Profile } from "@/src/lib/db/types";
 
@@ -41,16 +54,16 @@ function profileToEditForm(user: Profile): EditUserForm {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
+// Permission catalog mirrors the clinic's documented role spec one-to-one.
+// Keys are stable; labels are what the admin sees in the toggle UI.
 const ROLE_PERMISSION_CATALOG: Record<RoleKey, PermissionItem[]> = {
   doctor: [
     { key: "view_manage_appointments", label: "View & manage appointments" },
-    { key: "set_schedule", label: "Set schedule" },
-    { key: "set_unavailable_dates", label: "Set unavailable dates" },
+    { key: "set_schedule_unavailable", label: "Set schedule & unavailable dates" },
     { key: "add_consultation_notes", label: "Add consultation notes" },
     { key: "start_online_consultation", label: "Start online consultation" },
     { key: "full_admin_access", label: "Full admin access" },
-    { key: "manage_roles_permissions", label: "Manage roles & permissions" },
-    { key: "system_configuration", label: "System configuration" },
     { key: "handle_pos_billing", label: "Handle POS billing" },
   ],
   secretary: [
@@ -62,15 +75,26 @@ const ROLE_PERMISSION_CATALOG: Record<RoleKey, PermissionItem[]> = {
   patient: [
     { key: "register_login", label: "Register / login" },
     { key: "book_appointment", label: "Book appointment" },
-    { key: "choose_clinic", label: "Choose clinic" },
+    { key: "choose_clinic", label: "Choose clinic consultation" },
     { key: "choose_online_consultation", label: "Choose online consultation" },
-    { key: "pay_online_online_only", label: "Pay online (online consult only)" },
+    { key: "pay_online", label: "Pay online (online consult only)" },
   ],
   super_admin: [
     { key: "full_control", label: "Full control" },
     { key: "manage_roles_permissions", label: "Manage roles & permissions" },
     { key: "system_configuration", label: "System configuration" },
   ],
+};
+
+const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
+  doctor:
+    "Clinical staff. Manages own schedule, runs consultations, and has full admin access alongside the cashier flow.",
+  secretary:
+    "Front-desk staff. Handles bookings, walk-in registration, patient records, and POS billing.",
+  patient:
+    "End user. Registers, books visits (clinic or online), and pays online for virtual consultations.",
+  super_admin:
+    "System owner. Full control over the platform, role assignment, and system configuration.",
 };
 
 const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, boolean>> =
@@ -656,332 +680,326 @@ export default function UsersPage() {
 
   if (!canManage) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Forbidden. Only Super Admin and Doctor can manage users.
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 animate-fade-in-down">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            User management
-          </h1>
-          <p className="mt-1 text-base text-slate-600">
-            Manage user accounts, roles, and access permissions.
-          </p>
+    <div className="space-y-4">
+      {/* Toolbar header — same compact style as the POS terminal so the dashboard reads as one tool, not many. */}
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white">
+            <FaUsers className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold leading-tight text-slate-900">Users Management</h1>
+            <p className="text-xs text-slate-500">
+              Accounts, roles, and access permissions for the whole clinic.
+            </p>
+          </div>
         </div>
-        {activeTab === "accounts" ? (
-          <button
-            type="button"
-            onClick={() => {
-              setFeedback(null);
-              setShowAddModal(true);
-            }}
-            className="rounded-xl bg-emerald-600 px-5 py-2.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-emerald-700 hover:scale-[1.04] focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          >
-            + Add user
-          </button>
-        ) : null}
-      </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("accounts")}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-              activeTab === "accounts"
-                ? "bg-emerald-600 text-white shadow-md"
-                : "text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            User accounts
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("roles")}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-              activeTab === "roles"
-                ? "bg-emerald-600 text-white shadow-md"
-                : "text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            Roles & permissions
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Tab pill toggle — tighter than the previous tab bar. */}
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("accounts")}
+              className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                activeTab === "accounts"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Accounts
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("roles")}
+              className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                activeTab === "roles"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Roles & Permissions
+            </button>
+          </div>
+
+          {activeTab === "accounts" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFeedback(null);
+                setShowAddModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              <FaUserPlus className="h-3 w-3" aria-hidden="true" />
+              Add User
+            </button>
+          ) : null}
         </div>
-      </div>
+      </header>
 
       {feedback ? (
         <div
-          className={`rounded-2xl border px-4 py-3 text-sm ${
+          className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm ${
             feedback.type === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
-          {feedback.message}
+          {feedback.type === "success" ? (
+            <FaCircleCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <FaCircleExclamation className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <span>{feedback.message}</span>
         </div>
       ) : null}
 
       {activeTab === "accounts" ? (
         <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 animate-fade-in-up">
-        <div className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Active users</p>
-          <p className="mt-2 text-3xl font-bold text-emerald-900">{activeUsers}</p>
-        </div>
-        <div className="rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-sky-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Doctors</p>
-          <p className="mt-2 text-3xl font-bold text-sky-900">{doctorUsers}</p>
-        </div>
-        <div className="rounded-2xl border border-violet-200 bg-linear-to-br from-violet-50 to-violet-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Secretary</p>
-          <p className="mt-2 text-3xl font-bold text-violet-900">{secretaryUsers}</p>
-        </div>
-        <div className="rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-amber-100/50 px-4 py-4 shadow-sm hover:shadow-md transition">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Patients</p>
-          <p className="mt-2 text-3xl font-bold text-amber-900">{patientUsers}</p>
-        </div>
+      {/* Compact stat strip — single row, monospace numbers, one accent color. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <StatTile label="Active" value={activeUsers} icon={<FaUsers className="h-3 w-3" />} />
+        <StatTile label="Doctors" value={doctorUsers} icon={<FaUserDoctor className="h-3 w-3" />} />
+        <StatTile label="Secretaries" value={secretaryUsers} icon={<FaUserTie className="h-3 w-3" />} />
+        <StatTile label="Super Admins" value={superAdminUsers} icon={<FaUserShield className="h-3 w-3" />} />
+        <StatTile label="Patients" value={patientUsers} icon={<FaUserGear className="h-3 w-3" />} />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-1 flex-col gap-4 md:flex-row">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
-                Search
-              </label>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by email or name..."
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
-              />
-            </div>
-            <div className="w-full md:w-56">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
-                Role
-              </label>
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value as DbRole | "all")}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
-              >
-                <option value="all">All</option>
-                <option value="super_admin">Super Admin</option>
-                <option value="secretary">Secretary</option>
-                <option value="doctor">Doctor</option>
-                <option value="patient">Patient</option>
-              </select>
-            </div>
-            <div className="w-full md:w-56">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
-                Status
-              </label>
-              <select
-                value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value as typeof filterActive)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
-              >
-                <option value="all">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            <div className="w-full md:w-40">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
-                Per page
-              </label>
-              <select
-                value={pageSize}
-                onChange={(e) =>
-                  setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])
-                }
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
+      {/* Filter + bulk-action toolbar — one row on desktop, wraps on mobile. */}
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-1 min-w-[200px] flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Search</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Email or name…"
+              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200"
+            />
+          </label>
+          <label className="flex w-full flex-col gap-1 sm:w-40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Role</span>
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value as DbRole | "all")}
+              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200"
+            >
+              <option value="all">All roles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="doctor">Doctor</option>
+              <option value="secretary">Secretary</option>
+              <option value="patient">Patient</option>
+            </select>
+          </label>
+          <label className="flex w-full flex-col gap-1 sm:w-32">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</span>
+            <select
+              value={filterActive}
+              onChange={(e) => setFilterActive(e.target.value as typeof filterActive)}
+              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+          <label className="flex w-full flex-col gap-1 sm:w-24">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Per page</span>
+            <select
+              value={pageSize}
+              onChange={(e) =>
+                setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])
+              }
+              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setFilterRole("all");
+              setFilterActive("all");
+            }}
+            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Bulk action strip — only visible when one or more rows are selected. */}
+        {selectedUserIds.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+            <span className="text-xs font-bold text-emerald-800">
               {selectedUserIds.length} selected
-            </div>
-            {selectedUserIds.length > 0 ? (
-              <>
-                <button
-                  type="button"
-                  disabled={isMutating}
-                  onClick={() => bulkSetActive(true)}
-                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition disabled:opacity-50"
-                >
-                  Activate
-                </button>
-                <button
-                  type="button"
-                  disabled={isMutating}
-                  onClick={() => bulkSetActive(false)}
-                  className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 transition disabled:opacity-50"
-                >
-                  Deactivate
-                </button>
-                <button
-                  type="button"
-                  onClick={exportSelectedUsersCsv}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-                >
-                  Export
-                </button>
-              </>
-            ) : null}
+            </span>
+            <span className="text-slate-300">·</span>
             <button
               type="button"
-              onClick={() => {
-                setQuery("");
-                setFilterRole("all");
-                setFilterActive("all");
-              }}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+              disabled={isMutating}
+              onClick={() => bulkSetActive(true)}
+              className="rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
             >
-              Reset
+              Activate
             </button>
-            <div className="text-xs text-slate-600 font-medium">
-              {loading ? "Loading..." : `${filtered.length} user(s)`}
-            </div>
+            <button
+              type="button"
+              disabled={isMutating}
+              onClick={() => bulkSetActive(false)}
+              className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              Deactivate
+            </button>
+            <button
+              type="button"
+              onClick={exportSelectedUsersCsv}
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedUserIds([])}
+              className="ml-auto rounded-md px-2 py-1 text-xs text-slate-500 hover:text-slate-800"
+            >
+              Clear
+            </button>
           </div>
+        ) : null}
+
+        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+          <span>{loading ? "Loading…" : `${filtered.length} of ${users.length} user(s)`}</span>
         </div>
       </div>
 
-      <div className="md:hidden space-y-3 animate-fade-in-up">
+      {/* Mobile card view — same data as the desktop table, stacked. */}
+      <div className="space-y-2 md:hidden">
         {!loading && paginatedUsers.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400 shadow-sm">
-            No users found.
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-xs text-slate-400 shadow-sm">
+            No users match these filters.
           </div>
         ) : null}
         {paginatedUsers.map((u) => (
-          <div key={u.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
+          <div key={u.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
               <label className="pt-0.5">
                 <input
                   type="checkbox"
                   checked={selectedUserIds.includes(u.id)}
                   onChange={() => toggleUserSelection(u.id)}
-                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   aria-label={`Select ${u.full_name}`}
                 />
               </label>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{u.full_name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-slate-900">{u.full_name}</p>
                 <p className="mt-0.5 truncate text-xs text-slate-600">{u.email}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <RolePill role={u.role} />
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                      u.is_active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {u.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                {u.phone ? (
+                  <p className="mt-1 font-mono text-[11px] text-slate-500">{u.phone}</p>
+                ) : null}
               </div>
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                  u.is_active
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-slate-100 text-slate-700"
-                }`}
-              >
-                {u.is_active ? "Active" : "Inactive"}
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-                <p className="text-slate-500">Role</p>
-                <p className="mt-0.5 font-medium text-slate-800">{roleLabel(u.role)}</p>
+              <div className="flex shrink-0 flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={isMutating}
+                  onClick={() => openEditModal(u)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={`Edit ${u.full_name}`}
+                  title="Edit"
+                >
+                  <FaPenToSquare className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={isMutating}
+                  onClick={() => toggleActive(u)}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    u.is_active
+                      ? "border-red-200 text-red-700 hover:bg-red-50"
+                      : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                  aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
+                  title={u.is_active ? "Deactivate" : "Activate"}
+                >
+                  <FaPowerOff className="h-3 w-3" />
+                </button>
               </div>
-              <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-                <p className="text-slate-500">Phone</p>
-                <p className="mt-0.5 font-medium text-slate-800">{u.phone ?? "-"}</p>
-              </div>
-            </div>
-            <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2">
-              <p className="text-[11px] text-slate-500">UID</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-slate-700">{u.id}</p>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={isMutating}
-                onClick={() => openEditModal(u)}
-                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label={`Edit ${u.full_name}`}
-                title="Edit user"
-              >
-                <FaRegPenToSquare className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                disabled={isMutating}
-                onClick={() => toggleActive(u)}
-                className={`inline-flex items-center justify-center rounded-lg border px-3 py-2 transition-all duration-150 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  u.is_active
-                    ? "border-red-200 text-red-700 hover:bg-red-50 focus:ring-red-200"
-                    : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
-                }`}
-                aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
-                title={u.is_active ? "Deactivate user" : "Activate user"}
-              >
-                <FaPowerOff className="h-4 w-4" />
-              </button>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm hover-lift animate-fade-in-up md:block">
-        <table className="w-full text-left text-base">
-          <thead className="border-b border-slate-200 bg-linear-to-r from-emerald-50 to-cyan-50">
-            <tr>
-              <th className="px-4 py-4">
+      {/* Desktop table — tighter cells, monospace UID, classic admin-tool density. */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
+        <table className="w-full text-left">
+          <thead className="border-b border-slate-200 bg-slate-50">
+            <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              <th className="px-3 py-2">
                 <input
                   type="checkbox"
                   checked={allVisibleSelected}
                   onChange={toggleSelectAllVisible}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   aria-label="Select all visible users"
                 />
               </th>
-              <th className="px-6 py-4 font-semibold text-slate-700">User profile</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Email</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Phone</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Role</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Registered</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Action</th>
+              <th className="px-3 py-2">User</th>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Registered</th>
+              <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {!loading && paginatedUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                  No users found.
+                <td colSpan={8} className="px-3 py-10 text-center text-xs text-slate-400">
+                  No users match these filters.
                 </td>
               </tr>
             ) : null}
             {paginatedUsers.map((u) => (
               <tr
                 key={u.id}
-                className="border-t border-slate-200 align-top transition-all duration-150 hover:bg-emerald-50/30"
+                className="border-t border-slate-100 text-xs text-slate-700 transition hover:bg-emerald-50/40"
               >
-                <td className="px-4 py-4 align-middle">
+                <td className="px-3 py-2 align-middle">
                   <input
                     type="checkbox"
                     checked={selectedUserIds.includes(u.id)}
                     onChange={() => toggleUserSelection(u.id)}
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     aria-label={`Select ${u.full_name}`}
                   />
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-emerald-400 to-cyan-500 text-sm font-bold text-white shadow-sm">
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
                       {u.full_name
                         .split(" ")
                         .filter(Boolean)
@@ -990,63 +1008,59 @@ export default function UsersPage() {
                         .join("") || "U"}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">{u.full_name}</p>
-                      <p className="truncate text-xs text-slate-500">{u.id}</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">{u.full_name}</p>
+                      <p className="truncate font-mono text-[10px] text-slate-400">{u.id.slice(0, 8)}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-slate-700">{u.email}</td>
-                <td className="px-6 py-4 text-slate-700">{u.phone ?? "-"}</td>
-                <td className="px-6 py-4">
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {roleLabel(u.role)}
-                  </span>
+                <td className="px-3 py-2 text-slate-700">{u.email}</td>
+                <td className="px-3 py-2 font-mono text-[11px] text-slate-700">{u.phone ?? "—"}</td>
+                <td className="px-3 py-2">
+                  <RolePill role={u.role} />
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                       u.is_active
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-700"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-200 text-slate-600"
                     }`}
                   >
                     {u.is_active ? "Active" : "Inactive"}
                   </span>
                 </td>
-                <td className="px-6 py-4">
-                  <span className="text-sm text-slate-600">
-                    {new Date(u.created_at).toLocaleDateString(undefined, {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </span>
+                <td className="px-3 py-2 text-[11px] text-slate-500">
+                  {new Date(u.created_at).toLocaleDateString(undefined, {
+                    year: "2-digit",
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-wrap items-center gap-2">
+                <td className="px-3 py-2">
+                  <div className="flex justify-end gap-1">
                     <button
                       type="button"
                       disabled={isMutating}
                       onClick={() => openEditModal(u)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                       aria-label={`Edit ${u.full_name}`}
-                      title="Edit user"
+                      title="Edit"
                     >
-                      <FaRegPenToSquare className="h-4 w-4" />
+                      <FaPenToSquare className="h-3 w-3" />
                     </button>
                     <button
                       type="button"
                       disabled={isMutating}
                       onClick={() => toggleActive(u)}
-                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-150 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-60 ${
                         u.is_active
-                          ? "border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-200"
-                          : "border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-200"
+                          ? "border-red-200 text-red-700 hover:bg-red-50"
+                          : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                       }`}
                       aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name}`}
-                      title={u.is_active ? "Deactivate user" : "Activate user"}
+                      title={u.is_active ? "Deactivate" : "Activate"}
                     >
-                      <FaPowerOff className="h-4 w-4" />
+                      <FaPowerOff className="h-3 w-3" />
                     </button>
                   </div>
                 </td>
@@ -1056,59 +1070,58 @@ export default function UsersPage() {
         </table>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-600">
-            {loading
-              ? "Loading users..."
-              : filteredCount === 0
-                ? "No users to display"
-                : `Showing ${pageStart}-${pageEnd} of ${filteredCount} users`}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPageSafe === 1 || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-              Page {currentPageSafe} of {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPageSafe >= totalPages || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+      {/* Pagination — tighter, monospace page numbers. */}
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-slate-600">
+          {loading
+            ? "Loading…"
+            : filteredCount === 0
+              ? "No users to display"
+              : `Showing ${pageStart}–${pageEnd} of ${filteredCount}`}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPageSafe === 1 || loading}
+            className="rounded-md border border-slate-200 px-2 py-1 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ← Prev
+          </button>
+          <span className="rounded-md bg-slate-100 px-2 py-1 font-mono font-bold text-slate-700">
+            {currentPageSafe} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPageSafe >= totalPages || loading}
+            className="rounded-md border border-slate-200 px-2 py-1 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next →
+          </button>
         </div>
       </div>
       </>
       ) : null}
 
       {activeTab === "roles" ? (
-        <div className="space-y-4 animate-fade-in-up">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">System roles and permissions</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Access is defined here and managed under User Management, not in a separate submenu.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-600">
-              Toggle permissions per role, then save changes.
-            </p>
+        <div className="space-y-3">
+          {/* Save bar — sticky at the top of the tab so the cashier never loses sight of "your changes haven't been saved yet". */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <FaShieldHalved className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-bold text-slate-900">Roles &amp; Permissions Matrix</p>
+                <p className="text-[11px] text-slate-500">
+                  Toggle access per role · {rolesDirty ? "unsaved changes" : "all saved"}
+                </p>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={resetRolePermissions}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Reset defaults
               </button>
@@ -1116,349 +1129,461 @@ export default function UsersPage() {
                 type="button"
                 onClick={saveRolePermissions}
                 disabled={!rolesDirty || isMutating}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
               >
-                {isMutating ? "Saving..." : "Save permissions"}
+                <FaCircleCheck className="h-3 w-3" aria-hidden="true" />
+                {isMutating ? "Saving…" : "Save Permissions"}
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Role cards — one per role, each acting as both reference (description + headcount) and permission editor. */}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {(
               [
-                ["doctor", "Doctor", "border-sky-200 bg-sky-50/40 text-sky-900"],
-                ["secretary", "Secretary / Admin Staff", "border-emerald-200 bg-emerald-50/40 text-emerald-900"],
-                ["patient", "Patient", "border-amber-200 bg-amber-50/40 text-amber-900"],
-                ["super_admin", "Super Admin", "border-violet-200 bg-violet-50/40 text-violet-900"],
+                {
+                  key: "doctor",
+                  title: "Doctor",
+                  icon: FaUserDoctor,
+                  count: doctorUsers,
+                  accent: "border-sky-200 bg-sky-50/40",
+                  badge: "bg-sky-100 text-sky-800",
+                  iconBg: "bg-sky-600",
+                },
+                {
+                  key: "secretary",
+                  title: "Secretary / Admin Staff",
+                  icon: FaUserTie,
+                  count: secretaryUsers,
+                  accent: "border-emerald-200 bg-emerald-50/40",
+                  badge: "bg-emerald-100 text-emerald-800",
+                  iconBg: "bg-emerald-600",
+                },
+                {
+                  key: "patient",
+                  title: "Patient",
+                  icon: FaUserGear,
+                  count: patientUsers,
+                  accent: "border-amber-200 bg-amber-50/40",
+                  badge: "bg-amber-100 text-amber-800",
+                  iconBg: "bg-amber-500",
+                },
+                {
+                  key: "super_admin",
+                  title: "Super Admin",
+                  icon: FaUserShield,
+                  count: superAdminUsers,
+                  accent: "border-violet-200 bg-violet-50/40",
+                  badge: "bg-violet-100 text-violet-800",
+                  iconBg: "bg-violet-600",
+                },
               ] as const
-            ).map(([roleKey, roleTitle, colorClass]) => (
-              <div key={roleKey} className={`rounded-2xl border p-5 shadow-sm ${colorClass}`}>
-                <h3 className="text-base font-bold">{roleTitle}</h3>
-                <div className="mt-3 space-y-2">
-                  {ROLE_PERMISSION_CATALOG[roleKey].map((permission) => (
-                    <label
-                      key={permission.key}
-                      className="flex items-start gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm text-slate-700"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={Boolean(rolePermissions[roleKey][permission.key])}
-                        onChange={(e) => setPermission(roleKey, permission.key, e.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                      />
-                      <span>{permission.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+            ).map((cfg) => {
+              const Icon = cfg.icon;
+              return (
+                <div key={cfg.key} className={`rounded-xl border ${cfg.accent} p-4 shadow-sm`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg text-white ${cfg.iconBg}`}>
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">{cfg.title}</h3>
+                        <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                          {ROLE_DESCRIPTIONS[cfg.key]}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${cfg.badge}`}>
+                      {cfg.count} user{cfg.count === 1 ? "" : "s"}
+                    </span>
+                  </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Current account distribution
-            </h3>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Doctors</p>
-                <p className="text-lg font-bold text-slate-900">{doctorUsers}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Secretaries</p>
-                <p className="text-lg font-bold text-slate-900">{secretaryUsers}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Super Admins</p>
-                <p className="text-lg font-bold text-slate-900">{superAdminUsers}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Patients</p>
-                <p className="text-lg font-bold text-slate-900">{patientUsers}</p>
-              </div>
-            </div>
+                  <div className="mt-3 space-y-1 border-t border-slate-200/70 pt-3">
+                    {ROLE_PERMISSION_CATALOG[cfg.key].map((permission) => {
+                      const enabled = Boolean(rolePermissions[cfg.key][permission.key]);
+                      return (
+                        <label
+                          key={permission.key}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition ${
+                            enabled
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:bg-white/50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(e) => setPermission(cfg.key, permission.key, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className={enabled ? "font-semibold" : ""}>{permission.label}</span>
+                          {enabled ? (
+                            <FaCircleCheck className="ml-auto h-3 w-3 shrink-0 text-emerald-600" aria-hidden="true" />
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
       {showAddModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl mx-4 overflow-hidden">
-            <div className="flex items-start justify-between border-b border-slate-200 bg-linear-to-r from-emerald-50 to-cyan-50 px-6 py-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Create a new user</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Fill in details, verify email availability, then create the account.
-                </p>
-              </div>
+        <ModalShell title="Add new user" tone="emerald" onClose={closeModal}>
+          <form onSubmit={submitNewUser} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Full name" required>
+                <input
+                  value={newUser.full_name}
+                  onChange={(e) => setNewUser((p) => ({ ...p, full_name: e.target.value }))}
+                  className={INPUT_CLASS}
+                  placeholder="e.g. Esteban James"
+                  required
+                />
+              </Field>
+              <Field
+                label="Email"
+                required
+                hint={
+                  emailCheck.status === "available"
+                    ? "✓ Email is available."
+                    : emailCheck.status === "checking"
+                      ? "Checking…"
+                      : emailCheck.status === "duplicate"
+                        ? emailCheck.message ?? "Already registered."
+                        : emailCheck.status === "error"
+                          ? emailCheck.message ?? "Could not validate email."
+                          : "Validated on blur to prevent duplicates."
+                }
+                hintTone={
+                  emailCheck.status === "available"
+                    ? "success"
+                    : emailCheck.status === "duplicate" || emailCheck.status === "error"
+                      ? "error"
+                      : "muted"
+                }
+              >
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => {
+                    setNewUser((p) => ({ ...p, email: e.target.value }));
+                    setEmailCheck({ status: "idle" });
+                  }}
+                  onBlur={() => {
+                    void validateEmailAvailability(newUser.email);
+                  }}
+                  className={INPUT_CLASS}
+                  placeholder="name@email.com"
+                  required
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Phone (optional)">
+                <input
+                  value={newUser.phone}
+                  onChange={(e) => setNewUser((p) => ({ ...p, phone: e.target.value }))}
+                  className={INPUT_CLASS}
+                  placeholder="+63 9XX XXX XXXX"
+                />
+              </Field>
+              <Field label="Role" required>
+                <select
+                  value={newUser.role}
+                  onChange={(e) =>
+                    setNewUser((p) => ({
+                      ...p,
+                      role: e.target.value as CreateUserForm["role"],
+                    }))
+                  }
+                  className={INPUT_CLASS}
+                >
+                  <option value="secretary">Secretary / Admin Staff</option>
+                  <option value="doctor">Doctor</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </Field>
+            </div>
+
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+              The new user will receive a temporary password to share securely. Patient accounts self-register from the public site.
+            </p>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Close modal"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                ×
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isMutating || isCheckingDuplicate || emailCheck.status === "duplicate"}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <FaUserPlus className="h-3 w-3" aria-hidden="true" />
+                {isCheckingDuplicate ? "Checking email…" : isMutating ? "Creating…" : "Create User"}
               </button>
             </div>
-
-            <div className="px-6 py-5">
-            <form onSubmit={submitNewUser} className="space-y-5">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-                <p className="mb-3 text-sm font-semibold text-slate-800">Basic account information</p>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Full name
-                  </label>
-                  <input
-                    value={newUser.full_name}
-                    onChange={(e) =>
-                      setNewUser((p) => ({ ...p, full_name: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="e.g. Esteban James"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => {
-                      setNewUser((p) => ({ ...p, email: e.target.value }));
-                      setEmailCheck({ status: "idle" });
-                    }}
-                    onBlur={() => {
-                      void validateEmailAvailability(newUser.email);
-                    }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="name@email.com"
-                    required
-                  />
-                  {emailCheck.status !== "idle" ? (
-                    <p
-                      className={`mt-1 text-xs ${
-                        emailCheck.status === "available"
-                          ? "text-emerald-700"
-                          : emailCheck.status === "checking"
-                            ? "text-slate-500"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {emailCheck.message}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-slate-500">
-                      This email will be validated before submit to prevent duplicates.
-                    </p>
-                  )}
-                </div>
-              </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Phone (optional)
-                  </label>
-                  <input
-                    value={newUser.phone}
-                    onChange={(e) =>
-                      setNewUser((p) => ({ ...p, phone: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="+63..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Role
-                  </label>
-                  <select
-                    value={newUser.role}
-                    onChange={(e) =>
-                      setNewUser((p) => ({
-                        ...p,
-                        role: e.target.value as CreateUserForm["role"],
-                      }))
-                    }
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                  >
-                    <option value="secretary">Secretary</option>
-                    <option value="doctor">Doctor</option>
-                    <option value="super_admin">Super Admin</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating || isCheckingDuplicate || emailCheck.status === "duplicate"}
-                  className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition disabled:bg-emerald-300"
-                >
-                  {isCheckingDuplicate ? "Checking email..." : isMutating ? "Creating..." : "Create user"}
-                </button>
-              </div>
-            </form>
-            </div>
-          </div>
-        </div>
+          </form>
+        </ModalShell>
       ) : null}
 
       {showEditModal && editingUser ? (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl mx-4 overflow-hidden">
-            <div className="flex items-start justify-between border-b border-slate-200 bg-linear-to-r from-emerald-50 to-cyan-50 px-6 py-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Edit user</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Update profile details and role. Email cannot be changed here.
-                </p>
-              </div>
+        <ModalShell title={`Edit · ${editingUser.full_name}`} tone="emerald" onClose={closeEditModal}>
+          <p className="mb-3 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-800">Email:</span> {editingUser.email}
+            <span className="ml-2 text-slate-400">· Email cannot be changed.</span>
+          </p>
+          <form onSubmit={submitEditUser} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Full name" required>
+                <input
+                  value={editUser.full_name}
+                  onChange={(e) => setEditUser((p) => ({ ...p, full_name: e.target.value }))}
+                  className={INPUT_CLASS}
+                  required
+                />
+              </Field>
+              <Field label="Phone">
+                <input
+                  value={editUser.phone}
+                  onChange={(e) => setEditUser((p) => ({ ...p, phone: e.target.value }))}
+                  className={INPUT_CLASS}
+                  placeholder="+63 9XX XXX XXXX"
+                />
+              </Field>
+            </div>
+            <Field label="Role">
+              <select
+                value={editUser.role}
+                onChange={(e) =>
+                  setEditUser((p) => ({ ...p, role: e.target.value as DbRole }))
+                }
+                className={INPUT_CLASS}
+              >
+                <option value="super_admin">Super Admin</option>
+                <option value="doctor">Doctor</option>
+                <option value="secretary">Secretary / Admin Staff</option>
+                <option value="patient">Patient</option>
+                <option value="admin">Admin (legacy)</option>
+              </select>
+            </Field>
+            <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <input
+                type="checkbox"
+                checked={editUser.is_active}
+                onChange={(e) => setEditUser((p) => ({ ...p, is_active: e.target.checked }))}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              Account active
+            </label>
+            {currentUserId === editingUser.id && !editUser.is_active ? (
+              <p className="text-[11px] font-semibold text-amber-700">
+                You can&apos;t deactivate your own account. The toggle is ignored on save.
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Close edit modal"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                ×
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isMutating}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <FaCircleCheck className="h-3 w-3" aria-hidden="true" />
+                {isMutating ? "Saving…" : "Save Changes"}
               </button>
             </div>
-            <div className="px-6 py-5">
-              <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <span className="font-semibold text-slate-800">Email: </span>
-                {editingUser.email}
-              </p>
-              <form onSubmit={submitEditUser} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Full name</label>
-                  <input
-                    value={editUser.full_name}
-                    onChange={(e) => setEditUser((p) => ({ ...p, full_name: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                  <input
-                    value={editUser.phone}
-                    onChange={(e) => setEditUser((p) => ({ ...p, phone: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                    placeholder="+63..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                  <select
-                    value={editUser.role}
-                    onChange={(e) =>
-                      setEditUser((p) => ({ ...p, role: e.target.value as DbRole }))
-                    }
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400"
-                  >
-                    <option value="super_admin">Super Admin</option>
-                    <option value="secretary">Secretary</option>
-                    <option value="doctor">Doctor</option>
-                    <option value="patient">Patient</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={editUser.is_active}
-                    onChange={(e) => setEditUser((p) => ({ ...p, is_active: e.target.checked }))}
-                    className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                  />
-                  Account active
-                </label>
-                {currentUserId === editingUser.id && !editUser.is_active ? (
-                  <p className="text-xs text-amber-700">
-                    You cannot deactivate your own account. Unchecking will be ignored on save.
-                  </p>
-                ) : null}
-                <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeEditModal}
-                    className="rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isMutating}
-                    className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-300"
-                  >
-                    {isMutating ? "Saving..." : "Save changes"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+          </form>
+        </ModalShell>
       ) : null}
 
       {resultDialog ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div
-              className={`mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                resultDialog.type === "success"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-red-100 text-red-700"
-              }`}
-            >
-              {resultDialog.type === "success" ? "Success" : "Error"}
+        <ModalShell
+          title={resultDialog.title}
+          tone={resultDialog.type === "success" ? "emerald" : "red"}
+          onClose={() => setResultDialog(null)}
+          maxWidth="md"
+        >
+          <p className="text-xs text-slate-600">{resultDialog.message}</p>
+          {resultDialog.tempPassword ? (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900">Temporary password</p>
+              <p className="mt-1 break-all font-mono text-sm font-bold text-amber-950">
+                {resultDialog.tempPassword}
+              </p>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">{resultDialog.title}</h3>
-            <p className="mt-2 text-sm text-slate-600">{resultDialog.message}</p>
+          ) : null}
+          <div className="mt-3 flex justify-end gap-2 border-t border-slate-200 pt-3">
             {resultDialog.tempPassword ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-amber-900">Temporary password</p>
-                <p className="mt-1 break-all font-mono text-sm text-amber-950">
-                  {resultDialog.tempPassword}
-                </p>
-              </div>
-            ) : null}
-            <div className="mt-5 flex justify-end gap-2">
-              {resultDialog.tempPassword ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(resultDialog.tempPassword ?? "");
-                    setFeedback({
-                      type: "success",
-                      message: "Temporary password copied to clipboard.",
-                    });
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Copy password
-                </button>
-              ) : null}
               <button
                 type="button"
-                onClick={() => setResultDialog(null)}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(resultDialog.tempPassword ?? "");
+                  setFeedback({
+                    type: "success",
+                    message: "Temporary password copied to clipboard.",
+                  });
+                }}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Close
+                Copy password
               </button>
-            </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setResultDialog(null)}
+              className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800"
+            >
+              Close
+            </button>
           </div>
-        </div>
+        </ModalShell>
       ) : null}
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+const INPUT_CLASS =
+  "w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200";
+
+function StatTile({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+        <p className="font-mono text-xl font-black tabular-nums text-slate-900">{value}</p>
+      </div>
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+        {icon}
+      </div>
+    </div>
+  );
+}
+
+function RolePill({ role }: { role: DbRole }) {
+  const styles: Record<DbRole, string> = {
+    super_admin: "bg-violet-100 text-violet-800",
+    doctor: "bg-sky-100 text-sky-800",
+    secretary: "bg-emerald-100 text-emerald-800",
+    patient: "bg-amber-100 text-amber-800",
+    admin: "bg-slate-200 text-slate-700",
+  };
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[role]}`}>
+      {roleLabel(role)}
+    </span>
+  );
+}
+
+function Field({
+  label,
+  required = false,
+  hint,
+  hintTone = "muted",
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  hintTone?: "muted" | "success" | "error";
+  children: React.ReactNode;
+}) {
+  const toneClass =
+    hintTone === "success"
+      ? "text-emerald-700"
+      : hintTone === "error"
+        ? "text-red-600"
+        : "text-slate-500";
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+        {label}
+        {required ? <span className="ml-0.5 text-red-500">*</span> : null}
+      </span>
+      {children}
+      {hint ? <p className={`mt-1 text-[10px] ${toneClass}`}>{hint}</p> : null}
+    </label>
+  );
+}
+
+/**
+ * Shared modal frame — slim slate header, emerald or red accent strip,
+ * rounded-xl card. Closes on Esc + on backdrop click. Replaces the older
+ * gradient-headered modals so the whole module reads as one tool.
+ */
+function ModalShell({
+  title,
+  tone,
+  onClose,
+  maxWidth = "lg",
+  children,
+}: {
+  title: string;
+  tone: "emerald" | "red";
+  onClose: () => void;
+  maxWidth?: "md" | "lg" | "xl";
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const accent = tone === "red" ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100";
+  const widthClass = maxWidth === "md" ? "max-w-md" : maxWidth === "xl" ? "max-w-2xl" : "max-w-lg";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className={`w-full ${widthClass} rounded-xl bg-white shadow-2xl`}
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`flex items-center justify-between border-b px-4 py-2.5 ${accent}`}>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-slate-500 hover:bg-white/60 hover:text-slate-800"
+          >
+            <FaXmark className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="px-4 py-3">{children}</div>
+      </div>
     </div>
   );
 }

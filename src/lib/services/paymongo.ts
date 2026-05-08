@@ -80,7 +80,16 @@ export function mapCheckoutMethods(group: CheckoutMethodGroup): PayMongoMethod[]
   return Array.from(new Set([primary, ...extras]));
 }
 
+// Resolve the public app URL we hand to PayMongo for `success_url`. In
+// development we prefer APP_URL_DEV (typically http://localhost:3000) so the
+// post-payment bounce stays on the developer's machine — without this,
+// localhost bookings would redirect to the production domain after paying
+// and the local DB would never see the confirmation. In production
+// (NODE_ENV=production on Vercel) we always use APP_URL.
 function appUrl() {
+  if (process.env.NODE_ENV !== "production" && process.env.APP_URL_DEV) {
+    return process.env.APP_URL_DEV;
+  }
   return process.env.APP_URL ?? "http://localhost:3000";
 }
 
@@ -146,7 +155,29 @@ export async function createPayMongoCheckoutSession(input: {
 
   if (!response.ok) {
     const message = await response.text().catch(() => "");
-    throw new HttpError(500, `PayMongo error: ${response.status} ${message}`);
+    // PayMongo error bodies look like:
+    //   { "errors": [ { "code": "...", "detail": "human readable" } ] }
+    // Pull the first detail so the patient sees "Payment method qrph is not
+    // enabled on this account" instead of a 200-character JSON blob.
+    let detail = message;
+    try {
+      const parsed = JSON.parse(message) as {
+        errors?: Array<{ code?: string; detail?: string }>;
+      };
+      const firstDetail = parsed.errors?.[0]?.detail;
+      if (firstDetail) detail = firstDetail;
+    } catch {
+      // Not JSON — fall back to raw text.
+    }
+    console.error("[paymongo] checkout-session error", {
+      status: response.status,
+      methods: input.paymentMethods,
+      raw: message,
+    });
+    throw new HttpError(
+      response.status === 400 ? 400 : 502,
+      `PayMongo: ${detail || `HTTP ${response.status}`}`,
+    );
   }
 
   const body = (await response.json()) as {

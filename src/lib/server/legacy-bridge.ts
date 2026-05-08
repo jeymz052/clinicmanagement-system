@@ -95,12 +95,15 @@ export async function findOrCreatePatientByEmail(
 
 function deriveLegacyStatus(v2: V2Appointment): AppointmentStatus {
   if (v2.appointment_type === "Online") {
+    // Online visits never check in physically — collapse CheckedIn (shouldn't
+    // happen for Online, but be defensive) back to Confirmed for the UI.
     if (v2.status === "Completed") return "Completed";
     if (v2.status === "InProgress") return "In Progress";
     return "Confirmed";
   }
   if (v2.status === "Completed") return "Completed";
   if (v2.status === "InProgress") return "In Progress";
+  if (v2.status === "CheckedIn") return "Checked In";
   return "Confirmed";
 }
 

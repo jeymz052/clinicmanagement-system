@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { FaCalendarDays, FaCreditCard, FaHospital, FaPlus, FaUserPlus, FaUsers, FaVideo, FaClipboardList } from "react-icons/fa6";
+import { FaCalendarDays, FaCreditCard, FaHospital, FaPlus, FaUserCheck, FaUserPlus, FaUsers, FaVideo, FaClipboardList } from "react-icons/fa6";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { usePatients } from "@/src/components/clinic/useClinicData";
 import { ActionCard, DashboardHero, MetricCard, SectionCard, StatusPill } from "@/src/components/dashboard/dashboard-ui";
@@ -23,6 +23,11 @@ export default function SecretaryDashboard() {
   const onlineToday = useMemo(() => appointments.filter((a) => a.type === "Online" && a.date === today).length, [appointments, today]);
   const waitingClinicBilling = useMemo(() => appointments.filter((a) => a.type === "Clinic" && a.status === "In Progress").length, [appointments]);
   const readyToConfirm = useMemo(() => appointments.filter((a) => a.status === "Confirmed" && a.date === today).length, [appointments, today]);
+  // Patients who arrived at the front desk and are waiting for the doctor.
+  const waitingForDoctor = useMemo(
+    () => appointments.filter((a) => a.status === "Checked In" && a.date === today).length,
+    [appointments, today],
+  );
 
   const heroSummary = `${todayAppointments.length} appointment${todayAppointments.length === 1 ? "" : "s"} today · ${onlineToday} online`;
 
@@ -77,7 +82,18 @@ export default function SecretaryDashboard() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <StatusPill tone={appt.status === "In Progress" ? "amber" : appt.type === "Online" ? "sky" : "emerald"} variant="outline">
+                  <StatusPill
+                    tone={
+                      appt.status === "In Progress"
+                        ? "amber"
+                        : appt.status === "Checked In"
+                          ? "teal"
+                          : appt.type === "Online"
+                            ? "sky"
+                            : "emerald"
+                    }
+                    variant="outline"
+                  >
                     {appt.status}
                   </StatusPill>
                   <span className="text-slate-300 group-hover:text-slate-400 transition-colors">→</span>
@@ -89,17 +105,30 @@ export default function SecretaryDashboard() {
       </SectionCard>
 
       <SectionCard title="Front Desk Priorities" description="The most important tasks for today. Focus on these to keep the clinic running smoothly.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Link href="/appointments" className="group">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href="/appointments/my" className="group">
             <div className="relative overflow-hidden rounded-3xl border-2 border-emerald-200 bg-linear-to-br from-emerald-50 to-emerald-50/50 px-6 py-6 transition-all hover:-translate-y-2 hover:shadow-[0_16px_40px_rgba(16,185,129,0.15)]">
               <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-emerald-300/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="relative">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <FaCalendarDays className="text-2xl text-emerald-700" />
-                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Confirmations</span>
+                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Arrivals</span>
                 </div>
                 <p className="text-3xl font-black tracking-tight text-slate-900">{readyToConfirm}</p>
-                <p className="mt-2 text-xs leading-5 text-slate-600">Patients to nudge or check in.</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">Confirmed patients to check in on arrival.</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/appointments/my" className="group">
+            <div className="relative overflow-hidden rounded-3xl border-2 border-teal-200 bg-linear-to-br from-teal-50 to-teal-50/50 px-6 py-6 transition-all hover:-translate-y-2 hover:shadow-[0_16px_40px_rgba(20,184,166,0.15)]">
+              <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-teal-300/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="relative">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <FaUserCheck className="text-2xl text-teal-700" />
+                  <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">Waiting Room</span>
+                </div>
+                <p className="text-3xl font-black tracking-tight text-slate-900">{waitingForDoctor}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">Checked in, waiting for the doctor.</p>
               </div>
             </div>
           </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useMemo, useState, useTransition } from "react";
+import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
 import {
   FaCalendarDay,
   FaCalendarCheck,
@@ -13,16 +13,21 @@ import {
   FaClock,
   FaEnvelope,
   FaFilter,
+  FaFlagCheckered,
+  FaHeartPulse,
   FaHospital,
   FaInbox,
   FaListUl,
   FaMagnifyingGlass,
   FaPenToSquare,
+  FaPersonWalkingArrowRight,
   FaPhone,
+  FaPlay,
   FaPlus,
   FaTriangleExclamation,
   FaUpRightFromSquare,
   FaUser,
+  FaUserCheck,
   FaVideo,
   FaXmark,
 } from "react-icons/fa6";
@@ -34,6 +39,7 @@ import { SharedSlotPicker } from "@/src/components/appointments/SharedSlotPicker
 import { useAppointmentAvailability } from "@/src/components/appointments/useAppointmentAvailability";
 import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctors } from "@/src/components/appointments/useDoctors";
+import { VitalSignsForm } from "@/src/components/clinic/VitalSignsForm";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import {
   formatDisplayDate,
@@ -69,6 +75,10 @@ export default function AppointmentListPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   // Two-step cancel: clicking Cancel arms confirmation, second click commits.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  // Vitals modal: holds the appointment id whose vitals are being edited.
+  // null = closed. Used by the secretary at check-in (and the doctor too,
+  // though the doctor more often edits via the consultation page).
+  const [vitalsApptId, setVitalsApptId] = useState<string | null>(null);
 
   const summary = getAppointmentSummary(appointments);
   const primaryDoctor = doctors[0] ?? null;
@@ -209,6 +219,89 @@ export default function AppointmentListPage() {
       setAppointments(result.appointments);
       setFeedback(result.message);
       setConfirmingDeleteId(null);
+    });
+  }
+
+  function markArrived(appointmentId: string) {
+    if (!accessToken) {
+      setFeedback("Sign in again to continue.");
+      return;
+    }
+
+    startUpdateTransition(async () => {
+      const response = await fetch(`/api/v2/appointments/${appointmentId}/check-in`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setFeedback(payload.message ?? "Could not mark patient as arrived.");
+        return;
+      }
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointmentId ? { ...item, status: "Checked In" } : item,
+        ),
+      );
+      setFeedback("Patient marked as arrived. Doctor can now start the consultation.");
+    });
+  }
+
+  /**
+   * Doctor (or staff) flips the appointment to InProgress. This is the gate
+   * that unlocks POS billing — the cashier can't generate a bill until the
+   * consultation has been started.
+   */
+  function startConsultation(appointmentId: string) {
+    if (!accessToken) {
+      setFeedback("Sign in again to continue.");
+      return;
+    }
+    startUpdateTransition(async () => {
+      const response = await fetch(`/api/v2/appointments/${appointmentId}/start`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setFeedback(payload.message ?? "Could not start the consultation.");
+        return;
+      }
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointmentId ? { ...item, status: "In Progress" } : item,
+        ),
+      );
+      setFeedback("Consultation started. The bill is now ready in POS.");
+    });
+  }
+
+  /**
+   * Mark a consultation as complete. Optional — recording a POS payment
+   * also auto-completes the appointment, so the doctor can leave this for
+   * the cashier on most visits.
+   */
+  function completeConsultation(appointmentId: string) {
+    if (!accessToken) {
+      setFeedback("Sign in again to continue.");
+      return;
+    }
+    startUpdateTransition(async () => {
+      const response = await fetch(`/api/v2/appointments/${appointmentId}/complete`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setFeedback(payload.message ?? "Could not complete the consultation.");
+        return;
+      }
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointmentId ? { ...item, status: "Completed" } : item,
+        ),
+      );
+      setFeedback("Consultation marked as completed.");
     });
   }
 
@@ -397,6 +490,14 @@ export default function AppointmentListPage() {
                   Confirmed
                 </FilterChip>
                 <FilterChip
+                  active={statusFilter === "Checked In"}
+                  onClick={() => setStatusFilter("Checked In")}
+                  tone="teal"
+                  icon={<FaUserCheck className="h-2.5 w-2.5" />}
+                >
+                  Checked In
+                </FilterChip>
+                <FilterChip
                   active={statusFilter === "In Progress"}
                   onClick={() => setStatusFilter("In Progress")}
                   tone="amber"
@@ -567,6 +668,62 @@ export default function AppointmentListPage() {
                           ) : null}
                           {canManage && !isEditing && !isConfirmingDelete ? (
                             <>
+                              {appointment.type === "Clinic"
+                                && appointment.status === "Confirmed"
+                                && appointment.date === today ? (
+                                <button
+                                  type="button"
+                                  onClick={() => markArrived(appointment.id)}
+                                  disabled={isUpdating}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0d9488,#14b8a6)] px-3 py-2 text-xs font-bold text-white shadow-[0_8px_18px_rgba(20,184,166,0.25)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <FaPersonWalkingArrowRight className="h-3 w-3" aria-hidden="true" />
+                                  Mark Arrived
+                                </button>
+                              ) : null}
+                              {/* Vitals: available for any Clinic appointment from
+                                  Confirmed onward (so the secretary can capture
+                                  at check-in, and the doctor can re-take
+                                  during the visit). Online consultations skip
+                                  this — vitals require a physical encounter. */}
+                              {appointment.type === "Clinic"
+                                && (appointment.status === "Confirmed"
+                                  || appointment.status === "Checked In"
+                                  || appointment.status === "In Progress") ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setVitalsApptId(appointment.id)}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+                                >
+                                  <FaHeartPulse className="h-3 w-3" aria-hidden="true" />
+                                  Vitals
+                                </button>
+                              ) : null}
+                              {/* Start Consultation: Clinic visits need CheckedIn first;
+                                  Online visits skip arrival and start straight from Confirmed. */}
+                              {(appointment.type === "Clinic" && appointment.status === "Checked In")
+                                || (appointment.type === "Online" && appointment.status === "Confirmed") ? (
+                                <button
+                                  type="button"
+                                  onClick={() => startConsultation(appointment.id)}
+                                  disabled={isUpdating}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0284c7,#0ea5e9)] px-3 py-2 text-xs font-bold text-white shadow-[0_8px_18px_rgba(14,165,233,0.25)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <FaPlay className="h-3 w-3" aria-hidden="true" />
+                                  Start Consultation
+                                </button>
+                              ) : null}
+                              {appointment.status === "In Progress" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => completeConsultation(appointment.id)}
+                                  disabled={isUpdating}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#059669,#10b981)] px-3 py-2 text-xs font-bold text-white shadow-[0_8px_18px_rgba(16,185,129,0.25)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <FaFlagCheckered className="h-3 w-3" aria-hidden="true" />
+                                  Complete
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => beginEdit(appointment)}
@@ -764,8 +921,73 @@ export default function AppointmentListPage() {
           ))}
         </div>
       )}
+
+      {/* Vitals modal — opens when a row's "Vitals" button is clicked.
+          Backdrop click + Esc close. The form handles its own fetch / save
+          against /api/v2/appointments/:id/vitals. */}
+      {vitalsApptId ? (
+        <VitalsModal
+          appointmentId={vitalsApptId}
+          patientName={appointments.find((a) => a.id === vitalsApptId)?.patientName ?? ""}
+          onClose={() => setVitalsApptId(null)}
+        />
+      ) : null}
     </div>
   );
+}
+
+function VitalsModal({
+  appointmentId,
+  patientName,
+  onClose,
+}: {
+  appointmentId: string;
+  patientName: string;
+  onClose: () => void;
+}) {
+  // Esc closes the modal — small but expected affordance for keyboard users
+  // (front-desk staff are usually keyboard-heavy).
+  useEffectEsc(onClose);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-emerald-100 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/60 px-5 py-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Patient Check-in</p>
+            <h3 className="text-base font-bold text-slate-900">{patientName || "Vital Signs"}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+        <div className="p-4">
+          <VitalSignsForm appointmentId={appointmentId} onSaved={() => undefined} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tiny helper hook — wires Esc-to-close so the modal feels native. Kept
+// inline (not extracted) because no other component needs it yet.
+function useEffectEsc(handler: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handler();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handler]);
 }
 
 const INPUT_CLASS =
@@ -917,6 +1139,14 @@ function TypeBadge({ type }: { type: AppointmentType }) {
 }
 
 function StatusBadge({ status }: { status: AppointmentStatus }) {
+  if (status === "Checked In") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-800">
+        <FaUserCheck className="h-2.5 w-2.5" aria-hidden="true" />
+        Checked In
+      </span>
+    );
+  }
   if (status === "In Progress") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
