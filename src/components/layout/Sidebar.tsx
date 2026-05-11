@@ -224,6 +224,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
         { label: "Consultation History", href: "/consultations/history", icon: FaClockRotateLeft },
       ],
     },
+    { label: "My Settings", href: "/profile/settings", icon: FaGear },
+    { label: "Help Center", href: "/profile/help", icon: FaCircleQuestion },
   ],
 };
 

@@ -35,6 +35,7 @@ type RoleContextValue = {
   profile: UserProfile | null;
   isLoading: boolean;
   accessToken: string | null;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -197,6 +198,20 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  async function refreshProfile() {
+    if (!session?.access_token) return;
+
+    const nextProfile = await fetchProfileFromApi(session.access_token);
+    if (!nextProfile) return;
+
+    profileRef.current = nextProfile;
+    setProfile(nextProfile);
+    setRole(
+      resolveProtectedUiRole(roleToUiRole(nextProfile.role), nextProfile.email)
+      ?? DEFAULT_ROLE,
+    );
+  }
+
   async function signOut() {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
@@ -211,6 +226,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         profile,
         isLoading,
         accessToken: session?.access_token ?? null,
+        refreshProfile,
         signOut,
       }}
     >

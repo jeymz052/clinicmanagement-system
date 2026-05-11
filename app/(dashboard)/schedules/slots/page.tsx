@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useDoctors } from "@/src/components/appointments/useDoctors";
-import { useAppointments } from "@/src/components/appointments/useAppointments";
 import { useDoctorUnavailability } from "@/src/components/clinic/useClinicData";
 import { useRole } from "@/src/components/layout/RoleProvider";
 import {
-  buildBlockedDayLookup,
   formatDisplayDate,
   formatRange,
-  getSlotStatuses,
   type AppointmentType,
 } from "@/src/lib/appointments";
 import type { AvailabilityReason } from "@/src/lib/clinic";
@@ -27,26 +24,91 @@ const INITIAL_FORM: BlockForm = {
   note: "",
 };
 
+type LiveSlotStatus = {
+  start: string;
+  end: string;
+  mode: "Clinic" | "Online" | "Both";
+  bookedCount: number;
+  queueNumbers: number[];
+  activeType: AppointmentType | null;
+  availableForType: boolean;
+  isFull: boolean;
+  reason: string;
+  nextQueueNumber: number | null;
+};
+
 export default function TimeSlotsPage() {
   const { accessToken, role } = useRole();
   const { doctors } = useDoctors();
-  const { appointments } = useAppointments();
   const { data: blockedDates, setData: setBlockedDates, isLoading, error } = useDoctorUnavailability();
   const [form, setForm] = useState<BlockForm>(INITIAL_FORM);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<AppointmentType>("Clinic");
+  const [statuses, setStatuses] = useState<LiveSlotStatus[]>([]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusesLoading, setStatusesLoading] = useState(false);
   const [isSaving, startTransition] = useTransition();
 
   const doctor = doctors[0] ?? null;
   const doctorId = doctor?.slug ?? doctor?.id ?? "";
-  const blockedLookup = doctor ? buildBlockedDayLookup(blockedDates, doctorId) : {};
-  const statuses = doctor ? getSlotStatuses(doctorId, form.date, viewType, appointments, blockedLookup) : [];
   const doctorBlocks = blockedDates
     .filter((item) => item.doctorId === doctorId)
     .sort((left, right) => left.date.localeCompare(right.date));
   const canManage = role !== "PATIENT";
   const blockedCount = doctorBlocks.length;
+
+  useEffect(() => {
+    if (!doctorId || !form.date) {
+      setStatuses([]);
+      setStatusMessage(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadStatuses() {
+      try {
+        setStatusesLoading(true);
+        const response = await fetch(
+          `/api/v2/appointments/availability?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(form.date)}&type=${viewType}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load live slot preview.");
+        }
+
+        const payload = (await response.json()) as {
+          slots?: LiveSlotStatus[];
+          blockedReason?: string | null;
+        };
+
+        if (!controller.signal.aborted) {
+          setStatuses(payload.slots ?? []);
+          setStatusMessage(payload.blockedReason ?? null);
+        }
+      } catch (loadError) {
+        if ((loadError as Error).name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setStatuses([]);
+          setStatusMessage(
+            loadError instanceof Error ? loadError.message : "Failed to load live slot preview.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setStatusesLoading(false);
+        }
+      }
+    }
+
+    void loadStatuses();
+
+    return () => {
+      controller.abort();
+    };
+  }, [doctorId, form.date, viewType]);
 
   if (!doctor) {
     return (
@@ -300,35 +362,45 @@ export default function TimeSlotsPage() {
           </div>
 
           <div className="mt-5 space-y-3">
-            {statuses.map((slot) => {
-              const available = slot.availableForType;
-              return (
-                <div
-                  key={slot.start}
-                  className={`rounded-[1.4rem] border px-4 py-4 ${
-                    available
-                      ? "border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)]"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-900">{formatRange(slot.start, slot.end)}</p>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        available ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
-                      }`}
-                    >
-                      {slot.bookedCount}/5 booked
-                    </span>
+            {statusesLoading ? (
+              <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                Loading live slot status...
+              </div>
+            ) : statuses.length ? (
+              statuses.map((slot) => {
+                const available = slot.availableForType;
+                return (
+                  <div
+                    key={slot.start}
+                    className={`rounded-[1.4rem] border px-4 py-4 ${
+                      available
+                        ? "border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f7fef9_100%)]"
+                        : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-slate-900">{formatRange(slot.start, slot.end)}</p>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          available ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {slot.bookedCount}/5 booked
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {available
+                        ? `Available for ${viewType.toLowerCase()} queue ${slot.nextQueueNumber}.`
+                        : slot.reason}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {available
-                      ? `Available for ${viewType.toLowerCase()} queue ${slot.nextQueueNumber}.`
-                      : slot.reason}
-                  </p>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                {statusMessage ?? "No active saved schedule is opening bookings for this date."}
+              </div>
+            )}
           </div>
         </div>
       </div>

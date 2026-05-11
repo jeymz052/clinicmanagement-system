@@ -1,5 +1,4 @@
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
-import { SLOT_TEMPLATES_BY_DOCTOR } from "@/src/lib/appointments";
 import { isPastInClinicTime } from "@/src/lib/timezone";
 import type {
   DoctorSchedule,
@@ -74,27 +73,6 @@ async function assertWithinClinicHours(start: string, end: string) {
   }
 }
 
-async function getDoctorTemplateKey(doctorId: string) {
-  if (SLOT_TEMPLATES_BY_DOCTOR[doctorId]) {
-    return doctorId;
-  }
-
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("doctors")
-    .select("slug")
-    .eq("id", doctorId)
-    .maybeSingle<{ slug: string | null }>();
-  if (error) throw error;
-
-  const slug = data?.slug ?? null;
-  if (slug && SLOT_TEMPLATES_BY_DOCTOR[slug]) {
-    return slug;
-  }
-
-  return null;
-}
-
 export async function getSchedulableSlotsForDate(
   doctorId: string,
   date: string,
@@ -110,16 +88,7 @@ export async function getSchedulableSlotsForDate(
     ).filter((slot) => normalizeClock(slot.start) >= clinicHours.open && normalizeClock(slot.end) <= clinicHours.close);
   }
 
-  const templateKey = await getDoctorTemplateKey(doctorId);
-  if (!templateKey) return [];
-
-  return (SLOT_TEMPLATES_BY_DOCTOR[templateKey] ?? [])
-    .map((slot) => ({
-      start: slot.start.length === 5 ? `${slot.start}:00` : slot.start,
-      end: slot.end.length === 5 ? `${slot.end}:00` : slot.end,
-      mode: slot.mode,
-    }))
-    .filter((slot) => normalizeClock(slot.start) >= clinicHours.open && normalizeClock(slot.end) <= clinicHours.close);
+  return [];
 }
 
 export async function getDoctorScheduleForDate(

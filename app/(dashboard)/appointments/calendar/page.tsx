@@ -1,18 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useAppointments } from "@/src/components/appointments/useAppointments";
-import { useDoctorUnavailability } from "@/src/components/clinic/useClinicData";
+import { useEffect, useMemo, useState } from "react";
+import { useDoctors } from "@/src/components/appointments/useDoctors";
 import {
-  buildBlockedDayLookup,
-  DOCTORS,
   formatDisplayDate,
   formatRange,
-  getSlotStatuses,
   getWeekDates,
-  SLOT_TEMPLATES_BY_DOCTOR,
 } from "@/src/lib/appointments";
+
+type CalendarSlot = {
+  start: string;
+  end: string;
+  mode: "Clinic" | "Online" | "Both";
+  bookedCount: number;
+  queueNumbers: number[];
+  activeType: "Clinic" | "Online" | null;
+  available: boolean;
+  reason: string;
+};
+
+type DayAvailabilitySlot = {
+  start: string;
+  end: string;
+  mode: "Clinic" | "Online" | "Both";
+  bookedCount: number;
+  queueNumbers: number[];
+  activeType: "Clinic" | "Online" | null;
+  availableForType: boolean;
+  reason: string;
+};
+
+function mergeCalendarSlots(clinicSlots: DayAvailabilitySlot[], onlineSlots: DayAvailabilitySlot[]) {
+  const byKey = new Map<string, { clinic?: DayAvailabilitySlot; online?: DayAvailabilitySlot }>();
+
+  for (const slot of clinicSlots) {
+    const key = `${slot.start}-${slot.end}`;
+    byKey.set(key, { ...(byKey.get(key) ?? {}), clinic: slot });
+  }
+
+  for (const slot of onlineSlots) {
+    const key = `${slot.start}-${slot.end}`;
+    byKey.set(key, { ...(byKey.get(key) ?? {}), online: slot });
+  }
+
+  return Array.from(byKey.values())
+    .map<CalendarSlot | null>(({ clinic, online }) => {
+      const source = clinic ?? online;
+      if (!source) return null;
+
+      const available = Boolean(clinic?.availableForType || online?.availableForType);
+      return {
+        start: source.start,
+        end: source.end,
+        mode: source.mode,
+        bookedCount: clinic?.bookedCount ?? online?.bookedCount ?? 0,
+        queueNumbers: clinic?.queueNumbers?.length ? clinic.queueNumbers : (online?.queueNumbers ?? []),
+        activeType: clinic?.activeType ?? online?.activeType ?? null,
+        available,
+        reason: available ? "Available" : clinic?.reason ?? online?.reason ?? "Unavailable",
+      };
+    })
+    .filter((slot): slot is CalendarSlot => slot !== null)
+    .sort((left, right) => left.start.localeCompare(right.start));
+}
 
 function getCurrentWeekStart() {
   const today = new Date();
@@ -24,15 +75,97 @@ function getCurrentWeekStart() {
 }
 
 export default function CalendarViewPage() {
-  const [doctorId, setDoctorId] = useState(DOCTORS[0]?.id ?? "");
+  const { doctors, isLoading: doctorsLoading } = useDoctors();
+  const [doctorId, setDoctorId] = useState("");
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
-  const { appointments, isLoading, error } = useAppointments();
-  const { data: blockedDates } = useDoctorUnavailability();
+  const [availabilityByDate, setAvailabilityByDate] = useState<Record<string, CalendarSlot[]>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const selectedDoctor = DOCTORS.find((doctor) => doctor.id === doctorId) ?? DOCTORS[0];
-  const weekDates = getWeekDates(weekStart);
-  const templateSlots = SLOT_TEMPLATES_BY_DOCTOR[selectedDoctor.id] ?? [];
-  const blockedLookup = buildBlockedDayLookup(blockedDates, selectedDoctor.id);
+  useEffect(() => {
+    if (!doctorId && doctors[0]) {
+      setDoctorId(doctors[0].slug ?? doctors[0].id);
+    }
+  }, [doctorId, doctors]);
+
+  const selectedDoctor =
+    doctors.find((doctor) => (doctor.slug ?? doctor.id) === doctorId || doctor.id === doctorId)
+    ?? doctors[0]
+    ?? null;
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const selectedDoctorKey = selectedDoctor?.slug ?? selectedDoctor?.id ?? "";
+
+  useEffect(() => {
+    if (!selectedDoctorKey) {
+      setAvailabilityByDate({});
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadWeekAvailability() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const dayResults = await Promise.all(
+          weekDates.map(async (date) => {
+            const [clinicResponse, onlineResponse] = await Promise.all([
+              fetch(
+                `/api/v2/appointments/availability?doctor_id=${encodeURIComponent(selectedDoctorKey)}&date=${encodeURIComponent(date)}&type=Clinic`,
+                { cache: "no-store", signal: controller.signal },
+              ),
+              fetch(
+                `/api/v2/appointments/availability?doctor_id=${encodeURIComponent(selectedDoctorKey)}&date=${encodeURIComponent(date)}&type=Online`,
+                { cache: "no-store", signal: controller.signal },
+              ),
+            ]);
+
+            if (!clinicResponse.ok || !onlineResponse.ok) {
+              throw new Error("Failed to load the live calendar view.");
+            }
+
+            const clinicPayload = (await clinicResponse.json()) as { slots?: DayAvailabilitySlot[] };
+            const onlinePayload = (await onlineResponse.json()) as { slots?: DayAvailabilitySlot[] };
+
+            return [date, mergeCalendarSlots(clinicPayload.slots ?? [], onlinePayload.slots ?? [])] as const;
+          }),
+        );
+
+        if (!controller.signal.aborted) {
+          setAvailabilityByDate(Object.fromEntries(dayResults));
+        }
+      } catch (loadError) {
+        if ((loadError as Error).name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setAvailabilityByDate({});
+          setError(
+            loadError instanceof Error ? loadError.message : "Failed to load the live calendar view.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadWeekAvailability();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedDoctorKey, weekDates]);
+
+  const tableSlots = useMemo(() => {
+    const slotMap = new Map<string, CalendarSlot>();
+    for (const slots of Object.values(availabilityByDate)) {
+      for (const slot of slots) {
+        slotMap.set(`${slot.start}-${slot.end}`, slot);
+      }
+    }
+    return Array.from(slotMap.values()).sort((left, right) => left.start.localeCompare(right.start));
+  }, [availabilityByDate]);
 
   return (
     <div className="space-y-6 pb-8">
@@ -62,8 +195,8 @@ export default function CalendarViewPage() {
       <div className="rounded-4xl border border-emerald-100 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] animate-fade-in">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">{selectedDoctor.name}</h2>
-            <p className="text-sm text-slate-500">{selectedDoctor.specialty}</p>
+            <h2 className="text-lg font-bold text-slate-900">{selectedDoctor?.name ?? "Doctor schedule"}</h2>
+            <p className="text-sm text-slate-500">{selectedDoctor?.specialty ?? "Live availability"}</p>
           </div>
           <p className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 whitespace-nowrap">
             Week of {formatDisplayDate(weekStart)}
@@ -75,9 +208,10 @@ export default function CalendarViewPage() {
           <select
             value={doctorId}
             onChange={(event) => setDoctorId(event.target.value)}
+            disabled={!doctors.length}
             className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 hover:border-emerald-300"
           >
-            {DOCTORS.map((doctor) => (
+            {doctors.map((doctor) => (
               <option key={doctor.id} value={doctor.id}>
                 {doctor.name}
               </option>
@@ -112,60 +246,55 @@ export default function CalendarViewPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-3xl border border-emerald-100">
-          <table className="min-w-[900px] w-full text-sm">
-            <thead>
-              <tr>
-                <th className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700">
-                  Time
-                </th>
-                {weekDates.map((date) => (
-                  <th
-                    key={date}
-                    className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700"
-                  >
-                    {formatDisplayDate(date)}
+        {tableSlots.length ? (
+          <div className="overflow-x-auto rounded-3xl border border-emerald-100">
+            <table className="min-w-[900px] w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700">
+                    Time
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {templateSlots.map((slotTemplate) => (
-                <tr key={`${slotTemplate.start}-${slotTemplate.end}`}>
-                  <td className="border border-emerald-100 bg-emerald-50/40 px-4 py-3 font-medium text-slate-700">
-                    {formatRange(slotTemplate.start, slotTemplate.end)}
-                  </td>
-                  {weekDates.map((date) => {
-                    const clinicView = getSlotStatuses(
-                      selectedDoctor.id,
-                      date,
-                      "Clinic",
-                      appointments,
-                      blockedLookup,
-                    ).find((slot) => slot.start === slotTemplate.start);
-                    const onlineView = getSlotStatuses(
-                      selectedDoctor.id,
-                      date,
-                      "Online",
-                      appointments,
-                      blockedLookup,
-                    ).find((slot) => slot.start === slotTemplate.start);
-                    const slot = clinicView ?? onlineView;
-
-                    return (
-                      <td
-                        key={`${date}-${slotTemplate.start}`}
-                        className="border border-emerald-100 px-3 py-3"
-                      >
-                        {slot ? <CalendarCell slot={slot} /> : null}
-                      </td>
-                    );
-                  })}
+                  {weekDates.map((date) => (
+                    <th
+                      key={date}
+                      className="border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left font-semibold text-slate-700"
+                    >
+                      {formatDisplayDate(date)}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {tableSlots.map((slotTemplate) => (
+                  <tr key={`${slotTemplate.start}-${slotTemplate.end}`}>
+                    <td className="border border-emerald-100 bg-emerald-50/40 px-4 py-3 font-medium text-slate-700">
+                      {formatRange(slotTemplate.start, slotTemplate.end)}
+                    </td>
+                    {weekDates.map((date) => {
+                      const slot = availabilityByDate[date]?.find(
+                        (candidate) =>
+                          candidate.start === slotTemplate.start && candidate.end === slotTemplate.end,
+                      ) ?? null;
+
+                      return (
+                        <td
+                          key={`${date}-${slotTemplate.start}`}
+                          className="border border-emerald-100 px-3 py-3"
+                        >
+                          <CalendarCell slot={slot} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-600">
+            No active saved weekly schedules are opening slots for this week yet.
+          </div>
+        )}
 
         <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-600">
           <Legend color="bg-emerald-500" label="Clinic slot in use" />
@@ -174,7 +303,7 @@ export default function CalendarViewPage() {
           <Legend color="bg-slate-400" label="Unavailable or blocked" />
         </div>
 
-        {isLoading ? <p className="mt-4 text-sm text-slate-500">Loading persisted calendar...</p> : null}
+        {doctorsLoading || isLoading ? <p className="mt-4 text-sm text-slate-500">Loading live calendar...</p> : null}
       </div>
     </div>
   );
@@ -183,8 +312,17 @@ export default function CalendarViewPage() {
 function CalendarCell({
   slot,
 }: {
-  slot: ReturnType<typeof getSlotStatuses>[number];
+  slot: CalendarSlot | null;
 }) {
+  if (!slot) {
+    return (
+      <div className="rounded-[1.25rem] bg-slate-200 px-3 py-3 text-slate-600 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em]">Closed</p>
+        <p className="mt-2 text-xs">No saved schedule for this day.</p>
+      </div>
+    );
+  }
+
   let classes = "bg-amber-100 text-amber-800";
   let summary = "Open";
   let detail = slot.mode === "Both" ? "Available for clinic or online" : `${slot.mode} schedule`;
@@ -197,7 +335,7 @@ function CalendarCell({
     classes = "bg-sky-100 text-sky-800";
     summary = `Online ${slot.bookedCount}/5`;
     detail = `Queue ${slot.queueNumbers.join(", ")}`;
-  } else if (!slot.availableForType) {
+  } else if (!slot.available) {
     classes = "bg-slate-200 text-slate-600";
     summary = slot.reason;
     detail = slot.mode === "Both" ? "No booking allowed for this slot" : `${slot.mode} schedule`;

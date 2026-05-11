@@ -7,9 +7,14 @@ import {
   FaArrowRightFromBracket,
   FaBars,
   FaBell,
+  FaCircleCheck,
   FaChevronDown,
+  FaClock,
   FaGear,
+  FaInbox,
   FaRegUser,
+  FaTriangleExclamation,
+  FaWandSparkles,
 } from "react-icons/fa6";
 import { canAccessPath, getRoleProfile, type UserRole } from "@/src/lib/roles";
 
@@ -70,6 +75,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/schedules/slots": "Blocked Dates",
   "/settings": "Settings",
   "/profile": "Profile",
+  "/profile/settings": "My Settings",
+  "/profile/help": "Help Center",
   "/help": "Help Center",
   "/users": "Users",
 };
@@ -152,6 +159,70 @@ function formatChannels(channels: Array<"email" | "sms">) {
   return channels.join(" + ");
 }
 
+function formatStatusLabel(status: NotificationItem["status"]) {
+  switch (status) {
+    case "queued":
+      return "Queued";
+    case "failed":
+      return "Needs attention";
+    case "sent":
+    default:
+      return "Sent";
+  }
+}
+
+function getNotificationIcon(template: string, status: NotificationItem["status"]) {
+  if (status === "failed") return FaTriangleExclamation;
+
+  switch (template) {
+    case "online_meeting_link":
+      return FaWandSparkles;
+    case "appointment_payment_success":
+    case "appointment_paid_and_confirmed":
+    case "appointment_confirmed":
+    case "appointment_staff_confirmed":
+      return FaCircleCheck;
+    case "appointment_reminder_24h":
+    case "appointment_reminder_6h":
+      return FaClock;
+    default:
+      return FaInbox;
+  }
+}
+
+function getNotificationTone(item: NotificationItem) {
+  if (item.status === "failed") {
+    return {
+      card:
+        "border-transparent bg-transparent hover:bg-slate-50",
+      label: "text-rose-700",
+      iconWrap: "border-rose-200 bg-rose-50 text-rose-600",
+      action: "text-rose-700 hover:text-rose-800",
+      status: "text-rose-700",
+    };
+  }
+
+  if (!item.is_read) {
+    return {
+      card:
+        "border-transparent bg-transparent hover:bg-slate-50",
+      label: "text-emerald-800",
+      iconWrap: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      action: "text-emerald-700 hover:text-emerald-800",
+      status: "text-emerald-700",
+    };
+  }
+
+  return {
+    card:
+      "border-transparent bg-transparent hover:bg-slate-50",
+    label: "text-slate-600",
+    iconWrap: "border-slate-200 bg-slate-50 text-slate-600",
+    action: "text-slate-700 hover:text-slate-900",
+    status: "text-slate-500",
+  };
+}
+
 export function DashboardHeader({
   role,
   profile,
@@ -180,6 +251,7 @@ export function DashboardHeader({
   const displayEmail = profile?.email ?? "";
   const initials = getInitials(displayName);
   const canSeeSettings = canAccessPath(role, "/settings");
+  const settingsHref = canSeeSettings ? "/settings" : "/profile/settings";
   const notifCount = useMemo(() => items.filter((item) => !item.is_read).length, [items]);
   const hasNotifications = items.length > 0;
 
@@ -396,117 +468,164 @@ export function DashboardHeader({
             ) : null}
 
             {isNotifOpen ? (
-              <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top,0px)+4.3rem)] z-40 max-h-[calc(100svh-5.5rem)] w-auto overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)] sm:absolute sm:right-0 sm:inset-x-auto sm:top-auto sm:mt-3 sm:max-h-[32rem] sm:w-[min(24rem,calc(100vw-2rem))]">
-                <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-5">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Notification Center</p>
-                    <p className="mt-1 text-xs text-slate-500">In-app updates for your account activity.</p>
-                  </div>
-                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:justify-start">
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-slate-100 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => {
-                        void markAllRead();
-                      }}
-                      disabled={!hasNotifications}
-                    >
-                      Mark all read
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-slate-100 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={async () => {
-                        if (!accessToken) return;
-                        try {
-                          const res = await fetch("/api/v2/notifications", {
-                            method: "PATCH",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${accessToken}`,
-                            },
-                            body: JSON.stringify({ action: "delete_all" }),
-                          });
-                          if (!res.ok) throw new Error("Failed to delete notifications");
-                          setItems([]);
-                        } catch (err) {
-                          console.error(err);
-                        }
-                      }}
-                      disabled={!hasNotifications}
-                    >
-                      Clear all
-                    </button>
+              <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top,0px)+4.3rem)] z-40 w-auto overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_18px_56px_rgba(15,23,42,0.14)] sm:absolute sm:right-0 sm:inset-x-auto sm:top-auto sm:mt-3 sm:w-[min(22rem,calc(100vw-2rem))]">
+                <div className="border-b border-slate-200 bg-white px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                          <FaBell className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[15px] font-bold text-slate-900">Notifications</p>
+                          <p className="text-[11px] text-slate-500">{notifCount === 0 ? "All caught up" : `${notifCount} unread`}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => {
+                            void markAllRead();
+                          }}
+                          disabled={!hasNotifications}
+                        >
+                          Mark all read
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={async () => {
+                            if (!accessToken) return;
+                            try {
+                              const res = await fetch("/api/v2/notifications", {
+                                method: "PATCH",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${accessToken}`,
+                                },
+                                body: JSON.stringify({ action: "delete_all" }),
+                              });
+                              if (!res.ok) throw new Error("Failed to delete notifications");
+                              setItems([]);
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          disabled={!hasNotifications}
+                        >
+                          Clear all
+                        </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="max-h-[calc(100svh-12rem)] overflow-y-auto sm:max-h-96">
+                <div
+                  className="max-h-[calc(100svh-9.5rem)] overflow-y-auto bg-white px-3 py-1.5 sm:max-h-[26rem] [&::-webkit-scrollbar]:hidden"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
                   {isNotifLoading ? (
-                    <div className="space-y-3 p-4 sm:p-5">
-                      {[0, 1, 2].map((key) => (
-                        <div key={key} className="rounded-2xl border border-slate-100 p-4">
-                          <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
-                          <div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" />
-                          <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" />
+                    <div className="space-y-1 py-1.5">
+                      {[0, 1, 2, 3].map((key) => (
+                        <div key={key} className="flex items-start gap-2.5 rounded-xl px-1 py-2">
+                          <div className="h-8 w-8 animate-pulse rounded-lg bg-slate-100" />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="h-2.5 w-20 animate-pulse rounded-full bg-slate-100" />
+                            <div className="h-3.5 w-36 animate-pulse rounded-full bg-slate-100" />
+                            <div className="h-3 w-44 animate-pulse rounded-full bg-slate-100" />
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : items.length > 0 ? (
-                    <div className="space-y-2 p-3">
-                      {items.map((item) => (
-                        <div key={item.id} className={`rounded-2xl border px-3 py-3 transition sm:px-4 ${
-                          item.is_read
-                            ? "border-slate-100 hover:border-teal-100 hover:bg-teal-50/40"
-                            : "border-amber-200 bg-amber-50/50 hover:border-amber-300 hover:bg-amber-50/70"
-                        }`}>
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-                                {mapTemplateToLabel(item.template)}
-                              </p>
-                              <p className="mt-1 text-sm font-semibold text-slate-900">{item.subject}</p>
-                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.body}</p>
-                            </div>
-                            <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 sm:max-w-[8.5rem] sm:flex-col sm:items-end">
-                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                {formatChannels(item.channels)}
-                              </span>
-                              {!item.is_read && (
-                                <button
-                                  type="button"
-                                  className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 transition hover:bg-amber-200"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void markNotificationAsRead(item.id);
-                                  }}
-                                >
-                                  Mark Read
-                                </button>
-                              )}
-                              {item.href ? (
-                                <button
-                                  type="button"
-                                  className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700 transition hover:bg-emerald-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void openNotification(item);
-                                  }}
-                                >
-                                  Open
-                                </button>
-                              ) : null}
-                            </div>
+                    <div>
+                      {items.map((item) => {
+                        const tone = getNotificationTone(item);
+                        const Icon = getNotificationIcon(item.template, item.status);
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`group flex gap-2.5 border-b border-slate-100 py-2.5 last:border-b-0 ${tone.card}`}
+                          >
+                                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${tone.iconWrap}`}>
+                                  <Icon className="h-3 w-3" />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${tone.label}`}>
+                                            {mapTemplateToLabel(item.template)}
+                                          </span>
+                                          {!item.is_read ? (
+                                            <span className="rounded-full bg-slate-900 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-white">
+                                              New
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <p className="mt-0.5 truncate text-[12.5px] font-semibold text-slate-900">{item.subject}</p>
+                                        <p className="mt-0.5 truncate text-[11px] text-slate-500">{item.body}</p>
+                                      </div>
+
+                                      <div className="flex shrink-0 items-center gap-1.5">
+                                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                          {formatChannels(item.channels)}
+                                        </span>
+                                        <span className={`text-[10px] font-semibold ${tone.status}`}>
+                                          {formatStatusLabel(item.status)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-500">
+                                      <span>{formatRelativeDate(item.created_at)}</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span>{item.channels.length > 0 ? "Delivered" : "In-app only"}</span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[10px] font-semibold">
+                                      {!item.is_read && (
+                                        <button
+                                          type="button"
+                                          className={`transition ${tone.action}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void markNotificationAsRead(item.id);
+                                          }}
+                                        >
+                                          Mark read
+                                        </button>
+                                      )}
+                                      {item.href ? (
+                                        <button
+                                          type="button"
+                                          className="text-slate-900 transition hover:text-emerald-700"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void openNotification(item);
+                                          }}
+                                        >
+                                          Open
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
                           </div>
-                          <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
-                            <span>{formatRelativeDate(item.created_at)}</span>
-                            <span className="font-medium uppercase tracking-[0.12em]">{item.status}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="px-5 py-8 text-center text-sm text-slate-500">
-                      No notifications yet.
+                    <div className="px-2 py-8 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                          <FaInbox className="h-5 w-5" />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-slate-900">No notifications yet</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">New activity will show up here.</p>
                     </div>
                   )}
                 </div>
@@ -563,7 +682,7 @@ export function DashboardHeader({
                   </Link>
 
                   <Link
-                    href={canSeeSettings ? "/settings" : "/profile"}
+                    href={settingsHref}
                     className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-teal-700"
                     onClick={() => setIsMenuOpen(false)}
                   >
